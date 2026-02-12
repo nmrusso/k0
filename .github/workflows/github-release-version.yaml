@@ -1,0 +1,39 @@
+name: Release Version
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    # Skip if commit message contains 'chore(release):'
+    if: ${{ !contains(github.event.head_commit.message, 'chore(release):') }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Release
+        id: release
+        uses: ridedott/release-me-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          disable-changelog: true
+          node-module: true
+          release-branches: '["master"]'
+
+  build:
+    needs: release
+    if: ${{ needs.release.result == 'success' }}
+    uses: ./.github/workflows/build.yml
+    permissions:
+      contents: write
