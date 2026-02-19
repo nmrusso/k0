@@ -8,6 +8,7 @@ pub enum DomainError {
     Serialization(String),
     NoActiveContext,
     NoActiveNamespace,
+    ExternalApi(String),
 }
 
 impl fmt::Display for DomainError {
@@ -19,6 +20,7 @@ impl fmt::Display for DomainError {
             DomainError::Serialization(msg) => write!(f, "Serialization error: {}", msg),
             DomainError::NoActiveContext => write!(f, "No active context"),
             DomainError::NoActiveNamespace => write!(f, "No active namespace"),
+            DomainError::ExternalApi(msg) => write!(f, "External API error: {}", msg),
         }
     }
 }
@@ -52,6 +54,12 @@ impl From<serde_json::Error> for DomainError {
 impl From<serde_yaml::Error> for DomainError {
     fn from(e: serde_yaml::Error) -> Self {
         DomainError::Serialization(e.to_string())
+    }
+}
+
+impl From<reqwest::Error> for DomainError {
+    fn from(e: reqwest::Error) -> Self {
+        DomainError::ExternalApi(e.to_string())
     }
 }
 

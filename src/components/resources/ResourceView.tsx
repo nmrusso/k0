@@ -23,6 +23,8 @@ import { DependencyOverview } from "./DependencyOverview";
 import { ErrorsDashboard } from "./ErrorsDashboard";
 import { IncidentDashboard } from "./IncidentDashboard";
 import { HelmReleasesView } from "./HelmReleasesView";
+import { ObservabilityView } from "./ObservabilityView";
+import { EventsView } from "./EventsView";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { RefreshCw } from "lucide-react";
 import { RESOURCE_COORDS_MAP, CLUSTER_SCOPED_RESOURCES } from "@/lib/resource-coords";
@@ -90,7 +92,7 @@ export function ResourceView() {
   const crdParts = isCRD ? activeResource.slice(4).split("/") : [];
   const crdLabel = isCRD ? crdParts[crdParts.length - 2] || activeResource : "";
   const isCRDClusterScoped = isCRD && crdParts[crdParts.length - 1] === "Cluster";
-  const isOverview = activeResource === "overview" || activeResource === "network-overview" || activeResource === "log-errors" || activeResource === "incident-mode" || activeResource === "helm-releases";
+  const isOverview = activeResource === "overview" || activeResource === "network-overview" || activeResource === "log-errors" || activeResource === "incident-mode" || activeResource === "helm-releases" || activeResource === "observability" || activeResource === "events";
   const isClusterScopedResource = isCRDClusterScoped || CLUSTER_SCOPED_RESOURCES.has(activeResource);
 
   if (!activeContext) {
@@ -148,6 +150,14 @@ export function ResourceView() {
 
   if (activeResource === "helm-releases") {
     return <HelmReleasesView />;
+  }
+
+  if (activeResource === "observability") {
+    return <ObservabilityView />;
+  }
+
+  if (activeResource === "events") {
+    return <EventsView />;
   }
 
   return (

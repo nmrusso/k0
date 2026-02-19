@@ -1,6 +1,7 @@
 use kube::Api;
 use serde_json::Value;
 use tauri::State;
+use tokio::process::Command;
 
 use crate::infrastructure::streams::chat_streamer;
 use crate::interfaces::state::AppState;
@@ -11,6 +12,7 @@ pub async fn start_chat_session(
     message: String,
     context_info: Option<String>,
     active_resource: Option<String>,
+    resource_context: Option<String>,
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
@@ -30,6 +32,14 @@ pub async fn start_chat_session(
 
     let context = context_info.unwrap_or(ctx);
     let resource = active_resource.unwrap_or_default();
+    let res_context = resource_context.unwrap_or_default();
+
+    // Read permission mode from config (default: "text_only")
+    let permission_mode = state
+        .config_db
+        .get("claude_permission_mode")
+        .unwrap_or(Some("text_only".to_string()))
+        .unwrap_or_else(|| "text_only".to_string());
 
     let session = chat_streamer::start_chat_session(
         session_id.clone(),
@@ -37,6 +47,8 @@ pub async fn start_chat_session(
         context,
         ns,
         resource,
+        res_context,
+        permission_mode,
         app_handle,
     )
     .await?;
@@ -256,6 +268,95 @@ pub async fn execute_chat_action(
 
             Ok(format!("Patched {}/{}", kind, name))
         }
+        "rollback" => {
+            let release_name = params["release_name"]
+                .as_str()
+                .ok_or("Missing 'release_name' param for rollback")?;
+            let revision = params["revision"]
+                .as_i64()
+                .ok_or("Missing 'revision' param for rollback")? as i32;
+
+            let output = std::process::Command::new("helm")
+                .args(["rollback", release_name, &revision.to_string()])
+                .output()
+                .map_err(|e| format!("Failed to run helm rollback: {}", e))?;
+
+            if output.status.success() {
+                Ok(format!(
+                    "Rolled back {} to revision {}",
+                    release_name, revision
+                ))
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(format!("Helm rollback failed: {}", stderr))
+            }
+        }
+        "port_forward" => {
+            let target_kind = params["target_kind"]
+                .as_str()
+                .unwrap_or("pod");
+            let target_name = params["target_name"]
+                .as_str()
+                .ok_or("Missing 'target_name' param for port_forward")?;
+            let remote_port = params["remote_port"]
+                .as_u64()
+                .ok_or("Missing 'remote_port' param for port_forward")? as u16;
+            let local_port = params["local_port"]
+                .as_u64()
+                .map(|p| p as u16)
+                .unwrap_or(remote_port);
+
+            let (_, pf_ns, pf_ctx) = state
+                .client_manager
+                .get_active_client_and_context()
+                .await
+                .map_err(|e| e.to_string())?;
+
+            let resource = match target_kind {
+                "service" | "svc" => format!("svc/{}", target_name),
+                _ => format!("pod/{}", target_name),
+            };
+
+            let child = std::process::Command::new("kubectl")
+                .arg("port-forward")
+                .arg(&resource)
+                .arg(format!("{}:{}", local_port, remote_port))
+                .arg("-n")
+                .arg(&pf_ns)
+                .arg("--context")
+                .arg(&pf_ctx)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .map_err(|e| format!("Failed to start port-forward: {}", e))?;
+
+            let id = uuid::Uuid::new_v4().to_string();
+            let entry = crate::domain::entities::PortForwardEntry {
+                id: id.clone(),
+                target_kind: target_kind.to_string(),
+                target_name: target_name.to_string(),
+                local_port,
+                remote_port,
+            };
+
+            {
+                let mut pfs = state.port_forwards.lock().await;
+                pfs.insert(id, (entry, child));
+            }
+
+            Ok(format!(
+                "Port-forwarding {}:{} → localhost:{}",
+                target_name, remote_port, local_port
+            ))
+        }
         _ => Err(format!("Unknown action type: {}", action_type)),
+    }
+}
+
+#[tauri::command]
+pub async fn check_claude_cli() -> Result<bool, String> {
+    match Command::new("claude").arg("--version").output().await {
+        Ok(output) => Ok(output.status.success()),
+        Err(_) => Ok(false),
     }
 }

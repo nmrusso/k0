@@ -46,6 +46,7 @@ import {
   AlertCircle,
   Siren,
   Package,
+  Bell,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -387,6 +388,42 @@ export function Sidebar() {
               >
                 <Package className="h-4 w-4" />
                 Helm Releases
+              </button>
+            </div>
+          )}
+
+          {/* Observability button */}
+          {activeContext && activeNamespace && (
+            <div className="mb-3">
+              <button
+                onClick={() => setActiveResource("observability" as ResourceType)}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+                  activeResource === "observability"
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent/50",
+                )}
+              >
+                <Activity className="h-4 w-4" />
+                Observability
+              </button>
+            </div>
+          )}
+
+          {/* Events button */}
+          {activeContext && activeNamespace && (
+            <div className="mb-3">
+              <button
+                onClick={() => setActiveResource("events" as ResourceType)}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+                  activeResource === "events"
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent/50",
+                )}
+              >
+                <Bell className="h-4 w-4" />
+                Events
               </button>
             </div>
           )}

@@ -23,9 +23,18 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "YOUR_PUBLIC_KEY_HERE",
+      "endpoints": [
+        "https://github.com/Murzbul/k0/releases/latest/download/latest.json"
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
+    "longDescription": "A modern desktop IDE for managing Kubernetes clusters. Inspect workloads, stream logs, edit resources, port-forward, manage Helm releases, and debug incidents — all from a single app.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

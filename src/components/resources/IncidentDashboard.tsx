@@ -3,12 +3,14 @@ import {
   getIncidentSummary,
   getWhatChanged,
   getRolloutTimeline,
+  newrelicGetActiveAlerts,
 } from "@/lib/tauri-commands";
 import type {
   IncidentSummary,
   ChangeEvent,
   RolloutTimeline,
   UnhealthyWorkload,
+  ActiveAlert,
 } from "@/types/k8s";
 import { useClusterStore } from "@/stores/clusterStore";
 import {
@@ -34,6 +36,7 @@ import {
   Zap,
   Box,
   CheckCircle,
+  Bell,
 } from "lucide-react";
 import { RolloutReplay } from "./RolloutReplay";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -63,6 +66,9 @@ export function IncidentDashboard() {
   const [rolloutOpen, setRolloutOpen] = useState(false);
   const [rolloutTimeline, setRolloutTimeline] = useState<RolloutTimeline | null>(null);
   const [rolloutLoading, setRolloutLoading] = useState(false);
+
+  // NR Active Alerts
+  const [nrAlerts, setNrAlerts] = useState<ActiveAlert[]>([]);
 
   // Expanded states
   const [expandedWorkload, setExpandedWorkload] = useState<string | null>(null);
@@ -95,12 +101,23 @@ export function IncidentDashboard() {
     }
   }, [activeContext, activeNamespace, changeTimeRange]);
 
+  const fetchNrAlerts = useCallback(async () => {
+    if (!activeContext) return;
+    try {
+      const result = await newrelicGetActiveAlerts(activeContext);
+      setNrAlerts(result.alerts);
+    } catch {
+      setNrAlerts([]);
+    }
+  }, [activeContext]);
+
   // Initial fetch + auto-refresh
   useEffect(() => {
     fetchSummary();
-    const interval = setInterval(fetchSummary, 30000);
+    fetchNrAlerts();
+    const interval = setInterval(() => { fetchSummary(); fetchNrAlerts(); }, 30000);
     return () => clearInterval(interval);
-  }, [fetchSummary]);
+  }, [fetchSummary, fetchNrAlerts]);
 
   // Fetch changes when time range changes
   useEffect(() => {
@@ -447,6 +464,42 @@ export function IncidentDashboard() {
               </div>
             </div>
 
+            {/* NR Active Alerts */}
+            {nrAlerts.length > 0 && (
+              <div className="rounded-lg border border-red-500/30 bg-card p-3">
+                <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                  <Bell className="h-4 w-4 text-red-400" />
+                  NR Active Alerts
+                  <Badge variant="destructive" className="ml-auto text-xs">
+                    {nrAlerts.length}
+                  </Badge>
+                </div>
+                <div className="max-h-56 overflow-y-auto space-y-1.5">
+                  {nrAlerts.map((alert, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      <div
+                        className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
+                          alert.priority === "critical" ? "bg-red-500" : "bg-yellow-500"
+                        }`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <span className="font-medium">{alert.condition_name}</span>
+                        <span className="text-muted-foreground">
+                          {" "}— {alert.policy_name}
+                        </span>
+                        {alert.target_name && (
+                          <span className="text-muted-foreground"> on {alert.target_name}</span>
+                        )}
+                      </div>
+                      <span className="shrink-0 text-muted-foreground">
+                        {alert.open_time ? formatAlertAge(alert.open_time) : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Affected Routes */}
             {summary.affected_routes.length > 0 && (
               <div className="col-span-2 rounded-lg border border-border bg-card p-3">
@@ -507,6 +560,16 @@ export function IncidentDashboard() {
       </Sheet>
     </div>
   );
+}
+
+function formatAlertAge(openTime: number): string {
+  if (!openTime) return "";
+  const diffMs = Date.now() - openTime;
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 function ChangeIcon({ changeType }: { changeType: string }) {

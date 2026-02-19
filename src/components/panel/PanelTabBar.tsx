@@ -1,7 +1,7 @@
 import { usePanelStore } from "@/stores/panelStore";
 import { useClusterStore } from "@/stores/clusterStore";
-import { stopLogStream } from "@/lib/tauri-commands";
-import { ScrollText, Terminal, X, Plus } from "lucide-react";
+import { stopLogStream, stopChatSession } from "@/lib/tauri-commands";
+import { ScrollText, Terminal, MessageCircle, X, Plus } from "lucide-react";
 
 export function PanelTabBar() {
   const tabs = usePanelStore((s) => s.tabs);
@@ -16,6 +16,8 @@ export function PanelTabBar() {
     e.stopPropagation();
     if (tabType === "logs") {
       stopLogStream(tabId).catch(() => {});
+    } else if (tabType === "chat") {
+      stopChatSession(tabId).catch(() => {});
     }
     // Shell/terminal PTY cleanup is handled by component unmount (useEffect cleanup)
     closeTab(tabId);
@@ -36,6 +38,8 @@ export function PanelTabBar() {
           >
             {tab.type === "logs" ? (
               <ScrollText className="h-3.5 w-3.5 shrink-0" />
+            ) : tab.type === "chat" ? (
+              <MessageCircle className="h-3.5 w-3.5 shrink-0" />
             ) : (
               <Terminal className="h-3.5 w-3.5 shrink-0" />
             )}

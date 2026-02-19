@@ -11,6 +11,7 @@ import { useContexts } from "@/hooks/useContexts";
 import { useNamespaces } from "@/hooks/useNamespaces";
 import { useClusterStore } from "@/stores/clusterStore";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
+import { ClaudeCliStatus } from "./ClaudeCliStatus";
 import { Server, Layers, Settings } from "lucide-react";
 
 export function TopBar() {
@@ -76,6 +77,9 @@ export function TopBar() {
             {activeNamespace && ` / ${activeNamespace}`}
           </span>
         )}
+        <div className="mx-1 h-4 w-px bg-border" />
+        <ClaudeCliStatus />
+        <div className="mx-1 h-4 w-px bg-border" />
         <Button
           variant="ghost"
           size="sm"

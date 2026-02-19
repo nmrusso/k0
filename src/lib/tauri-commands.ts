@@ -31,8 +31,14 @@ import type {
   IncidentSummary,
   ChangeEvent,
   RolloutTimeline,
+  NamespaceEventInfo,
   HelmRelease,
   HelmRevision,
+  PodMetrics,
+  NamespaceMetricsSummary,
+  NodeMetrics,
+  ActiveAlertsSummary,
+  ContainerUsageSummary,
 } from "@/types/k8s";
 
 // Contexts
@@ -267,6 +273,9 @@ export const getWhatChanged = (sinceMinutes: number) =>
 export const getRolloutTimeline = (deploymentName: string) =>
   invoke<RolloutTimeline>("get_rollout_timeline", { deploymentName });
 
+export const getNamespaceEvents = (sinceMinutes?: number) =>
+  invoke<NamespaceEventInfo[]>("get_namespace_events", { sinceMinutes });
+
 // Helm
 export const helmListReleases = () =>
   invoke<HelmRelease[]>("helm_list_releases");
@@ -292,27 +301,48 @@ export const helmGetManifest = (releaseName: string, revision: number) =>
 export const helmDiffLocal = (releaseName: string, revision: number) =>
   invoke<string>("helm_diff_local", { releaseName, revision });
 
-// Chat (disabled — Claude CLI integration not yet ready)
-// export const startChatSession = (
-//   sessionId: string,
-//   message: string,
-//   contextInfo?: string,
-//   activeResource?: string,
-// ) =>
-//   invoke<void>("start_chat_session", {
-//     sessionId,
-//     message,
-//     contextInfo,
-//     activeResource,
-//   });
-//
-// export const sendChatMessage = (sessionId: string, message: string) =>
-//   invoke<void>("send_chat_message", { sessionId, message });
-//
-// export const stopChatSession = (sessionId: string) =>
-//   invoke<void>("stop_chat_session", { sessionId });
-//
-// export const executeChatAction = (
-//   actionType: string,
-//   params: Record<string, unknown>,
-// ) => invoke<string>("execute_chat_action", { actionType, params });
+// New Relic
+export const newrelicGetPodMetrics = (context: string, podName: string, namespace: string, timeRangeMinutes: number) =>
+  invoke<PodMetrics>("newrelic_get_pod_metrics", { context, podName, namespace, timeRangeMinutes });
+
+export const newrelicGetNamespaceMetrics = (context: string, namespace: string, timeRangeMinutes: number) =>
+  invoke<NamespaceMetricsSummary>("newrelic_get_namespace_metrics", { context, namespace, timeRangeMinutes });
+
+export const newrelicGetNodeMetrics = (context: string) =>
+  invoke<NodeMetrics[]>("newrelic_get_node_metrics", { context });
+
+export const newrelicGetActiveAlerts = (context: string) =>
+  invoke<ActiveAlertsSummary>("newrelic_get_active_alerts", { context });
+
+export const newrelicGetContainerUsage = (context: string, podName: string, namespace: string) =>
+  invoke<ContainerUsageSummary>("newrelic_get_container_usage", { context, podName, namespace });
+
+// Chat — Claude CLI integration
+export const startChatSession = (
+  sessionId: string,
+  message: string,
+  contextInfo?: string,
+  activeResource?: string,
+  resourceContext?: string,
+) =>
+  invoke<void>("start_chat_session", {
+    sessionId,
+    message,
+    contextInfo,
+    activeResource,
+    resourceContext,
+  });
+
+export const sendChatMessage = (sessionId: string, message: string) =>
+  invoke<void>("send_chat_message", { sessionId, message });
+
+export const stopChatSession = (sessionId: string) =>
+  invoke<void>("stop_chat_session", { sessionId });
+
+export const executeChatAction = (
+  actionType: string,
+  params: Record<string, unknown>,
+) => invoke<string>("execute_chat_action", { actionType, params });
+
+export const checkClaudeCli = () =>
+  invoke<boolean>("check_claude_cli");

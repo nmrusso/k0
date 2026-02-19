@@ -24,7 +24,7 @@ pub async fn run_pod_watcher(
     let mut stream = watcher::watcher(pod_api, watcher_config).boxed();
 
     let debounce_duration = Duration::from_millis(300);
-    let age_tick = Duration::from_secs(1);
+    let age_tick = Duration::from_secs(30);
     let mut last_emit = Instant::now() - debounce_duration;
     let mut pending_emit = false;
     let mut age_interval = tokio::time::interval(age_tick);

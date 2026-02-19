@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { ResourceType, PodInfo } from "@/types/k8s";
 import {
@@ -47,6 +47,9 @@ export function useResources<T = unknown>() {
   const activeNamespace = useClusterStore((s) => s.activeNamespace);
   const activeResource = useClusterStore((s) => s.activeResource);
 
+  // Monotonic request counter to discard stale responses
+  const requestIdRef = useRef(0);
+
   const refresh = useCallback(async () => {
     const isClusterScoped = CLUSTER_SCOPED_RESOURCES.has(activeResource);
 
@@ -55,6 +58,8 @@ export function useResources<T = unknown>() {
       return;
     }
 
+    const thisRequest = ++requestIdRef.current;
+
     setLoading(true);
     setError(null);
 
@@ -62,6 +67,7 @@ export function useResources<T = unknown>() {
       const fetcher = fetcherMap[activeResource];
       if (fetcher) {
         const result = await fetcher();
+        if (requestIdRef.current !== thisRequest) return; // stale
         setData(result as T[]);
       } else {
         // Fall through to generic resource fetcher
@@ -74,16 +80,20 @@ export function useResources<T = unknown>() {
             coords.plural,
             coords.clusterScoped ?? false,
           );
+          if (requestIdRef.current !== thisRequest) return; // stale
           setData(result as T[]);
         } else {
           setData([]);
         }
       }
     } catch (e) {
+      if (requestIdRef.current !== thisRequest) return; // stale
       setError(String(e));
       setData([]);
     } finally {
-      setLoading(false);
+      if (requestIdRef.current === thisRequest) {
+        setLoading(false);
+      }
     }
   }, [activeContext, activeNamespace, activeResource]);
 
@@ -91,21 +101,35 @@ export function useResources<T = unknown>() {
     refresh();
   }, [refresh]);
 
-  // Pod watch subscription
+  // Pod watch subscription — capture context/namespace at subscription time
+  // to discard events from a previous context
   useEffect(() => {
     if (activeResource !== "pods" || !activeContext || !activeNamespace) return;
 
+    const subscribedContext = activeContext;
+    const subscribedNamespace = activeNamespace;
     let unlisten: (() => void) | null = null;
+    let cancelled = false;
 
     startWatchingPods().catch(console.error);
 
     listen<PodInfo[]>("pods-changed", (event) => {
+      if (cancelled) return;
+      // Verify the store still matches what we subscribed to
+      const state = useClusterStore.getState();
+      if (
+        state.activeContext !== subscribedContext ||
+        state.activeNamespace !== subscribedNamespace
+      ) {
+        return;
+      }
       setData(event.payload as T[]);
     }).then((fn) => {
       unlisten = fn;
     });
 
     return () => {
+      cancelled = true;
       stopWatchingPods().catch(console.error);
       unlisten?.();
     };

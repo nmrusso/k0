@@ -10,12 +10,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_pty::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
-            // interfaces::tauri_commands::chat_commands::start_chat_session,
-            // interfaces::tauri_commands::chat_commands::send_chat_message,
-            // interfaces::tauri_commands::chat_commands::stop_chat_session,
-            // interfaces::tauri_commands::chat_commands::execute_chat_action,
+            interfaces::tauri_commands::chat_commands::start_chat_session,
+            interfaces::tauri_commands::chat_commands::send_chat_message,
+            interfaces::tauri_commands::chat_commands::stop_chat_session,
+            interfaces::tauri_commands::chat_commands::execute_chat_action,
+            interfaces::tauri_commands::chat_commands::check_claude_cli,
             interfaces::tauri_commands::cluster_commands::get_contexts,
             interfaces::tauri_commands::cluster_commands::set_active_context,
             interfaces::tauri_commands::cluster_commands::get_namespaces,
@@ -73,6 +76,7 @@ pub fn run() {
             interfaces::tauri_commands::incident_commands::get_incident_summary,
             interfaces::tauri_commands::incident_commands::get_what_changed,
             interfaces::tauri_commands::incident_commands::get_rollout_timeline,
+            interfaces::tauri_commands::incident_commands::get_namespace_events,
             interfaces::tauri_commands::helm_commands::helm_list_releases,
             interfaces::tauri_commands::helm_commands::helm_get_history,
             interfaces::tauri_commands::helm_commands::helm_rollback,
@@ -80,6 +84,11 @@ pub fn run() {
             interfaces::tauri_commands::helm_commands::helm_get_values,
             interfaces::tauri_commands::helm_commands::helm_get_manifest,
             interfaces::tauri_commands::helm_commands::helm_diff_local,
+            interfaces::tauri_commands::newrelic_commands::newrelic_get_pod_metrics,
+            interfaces::tauri_commands::newrelic_commands::newrelic_get_namespace_metrics,
+            interfaces::tauri_commands::newrelic_commands::newrelic_get_node_metrics,
+            interfaces::tauri_commands::newrelic_commands::newrelic_get_active_alerts,
+            interfaces::tauri_commands::newrelic_commands::newrelic_get_container_usage,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

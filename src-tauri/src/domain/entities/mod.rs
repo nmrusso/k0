@@ -6,6 +6,7 @@ pub mod helm;
 pub mod incident;
 pub mod networking;
 pub mod pod;
+pub mod newrelic;
 pub mod workload;
 
 // Re-export all entities for convenience

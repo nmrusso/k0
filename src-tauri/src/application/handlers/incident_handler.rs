@@ -61,4 +61,12 @@ impl IncidentHandler {
     ) -> Result<RolloutTimeline, DomainError> {
         incident_repository::build_rollout_timeline(client, namespace, deployment_name).await
     }
+
+    pub async fn get_namespace_events(
+        client: &Client,
+        namespace: &str,
+        since_minutes: Option<u32>,
+    ) -> Result<Vec<NamespaceEventInfo>, DomainError> {
+        incident_repository::fetch_namespace_events(client, namespace, since_minutes).await
+    }
 }

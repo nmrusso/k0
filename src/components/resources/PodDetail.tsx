@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { useClusterStore } from "@/stores/clusterStore";
 import { usePanelStore } from "@/stores/panelStore";
-import { getPodDetail, getSecretValue, getSecretData, patchResource, getImageHistory } from "@/lib/tauri-commands";
+import { getPodDetail, getSecretValue, getSecretData, patchResource, getImageHistory, newrelicGetPodMetrics, newrelicGetNodeMetrics, newrelicGetContainerUsage } from "@/lib/tauri-commands";
 import { CollapsibleBadgeList } from "@/components/ui/collapsible-badge-list";
 import { PortForwardDialog } from "@/components/portforward/PortForwardDialog";
 import {
@@ -30,6 +30,8 @@ import {
   ScrollText,
   ArrowUpRight,
 } from "lucide-react";
+import { AskClaudeButton } from "@/components/resources/AskClaudeButton";
+import { gatherPodContext } from "@/lib/chat-context";
 import { ErrorAlert, SectionHeader, IconButton, StatusDot } from "@/components/atoms";
 import { DetailRow } from "@/components/molecules";
 import {
@@ -46,6 +48,10 @@ import {
 } from "@/components/ui/dialog";
 import type {
   PodDetailInfo,
+  PodMetrics as PodMetricsType,
+  NodeMetrics as NodeMetricsType,
+  ContainerUsageSummary,
+  ContainerUsage,
   ProbeInfo,
   EnvVarInfo,
   MountInfo,
@@ -53,6 +59,7 @@ import type {
   TolerationInfo,
   ImageHistoryEntry,
 } from "@/types/k8s";
+import { MetricsChart } from "@/components/metrics/MetricsChart";
 import {
   POD_COORDS,
   DEPLOYMENT_COORDS,
@@ -500,6 +507,192 @@ function ImageHistoryDialog({
   );
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes.toFixed(0)}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}Ki`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)}Mi`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}Gi`;
+}
+
+function formatCpu(cores: number): string {
+  if (cores < 0.001) return `${(cores * 1_000_000).toFixed(0)}µ`;
+  if (cores < 1) return `${(cores * 1000).toFixed(0)}m`;
+  return `${cores.toFixed(2)}`;
+}
+
+function utilizationColor(pct: number): string {
+  if (pct >= 90) return "bg-red-500";
+  if (pct >= 70) return "bg-yellow-500";
+  return "bg-green-500";
+}
+
+function utilizationTextColor(pct: number): string {
+  if (pct >= 90) return "text-red-400";
+  if (pct >= 70) return "text-yellow-400";
+  return "text-green-400";
+}
+
+function ResourceBar({ label, used, total, formatFn }: { label: string; used: number; total: number; formatFn: (v: number) => string }) {
+  const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className={`font-mono ${utilizationTextColor(pct)}`}>
+          {formatFn(used)} / {formatFn(total)} ({pct.toFixed(0)}%)
+        </span>
+      </div>
+      <div className="h-2 w-full rounded-full bg-muted">
+        <div
+          className={`h-full rounded-full transition-all ${utilizationColor(pct)}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function NodeMetricsCard({ nodeMetrics }: { nodeMetrics: NodeMetricsType }) {
+  return (
+    <section>
+      <SectionHeader>Node: {nodeMetrics.node_name}</SectionHeader>
+      <div className="rounded-lg border border-border p-4 space-y-3">
+        <ResourceBar
+          label="CPU"
+          used={nodeMetrics.cpu_used_cores}
+          total={nodeMetrics.allocatable_cpu_cores}
+          formatFn={(v) => `${v.toFixed(2)} cores`}
+        />
+        <ResourceBar
+          label="Memory"
+          used={nodeMetrics.memory_working_set_bytes}
+          total={nodeMetrics.allocatable_memory_bytes}
+          formatFn={formatBytes}
+        />
+        <ResourceBar
+          label="Disk"
+          used={nodeMetrics.fs_used_bytes}
+          total={nodeMetrics.fs_capacity_bytes}
+          formatFn={formatBytes}
+        />
+        <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+          <span>Pods: {nodeMetrics.allocatable_pods} allocatable / {nodeMetrics.capacity_pods} capacity</span>
+          <span className={`font-mono ${utilizationTextColor(nodeMetrics.cpu_utilization_pct)}`}>
+            CPU utilization: {nodeMetrics.cpu_utilization_pct.toFixed(1)}%
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ContainerResourceBars({
+  container,
+  usage,
+}: {
+  container: { requests_cpu: string; requests_memory: string; limits_cpu: string; limits_memory: string };
+  usage: ContainerUsage | undefined;
+}) {
+  if (!usage) {
+    // Fallback to text display
+    return (
+      <>
+        {(container.requests_cpu || container.requests_memory) && (
+          <DetailRow label="Requests">
+            {[
+              container.requests_cpu && `CPU: ${container.requests_cpu}`,
+              container.requests_memory && `Memory: ${container.requests_memory}`,
+            ].filter(Boolean).join(", ")}
+          </DetailRow>
+        )}
+        {(container.limits_cpu || container.limits_memory) && (
+          <DetailRow label="Limits">
+            {[
+              container.limits_cpu && `CPU: ${container.limits_cpu}`,
+              container.limits_memory && `Memory: ${container.limits_memory}`,
+            ].filter(Boolean).join(", ")}
+          </DetailRow>
+        )}
+      </>
+    );
+  }
+
+  const hasCpuLimit = usage.cpu_limit_cores > 0;
+  const hasMemLimit = usage.memory_limit_bytes > 0;
+
+  return (
+    <>
+      <DetailRow label="Resources">
+        <div className="w-full space-y-2">
+          {hasCpuLimit ? (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">CPU</span>
+                <span className={`font-mono ${utilizationTextColor(
+                  (usage.cpu_used_cores / usage.cpu_limit_cores) * 100
+                )}`}>
+                  {formatCpu(usage.cpu_used_cores)} / {formatCpu(usage.cpu_limit_cores)}
+                </span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-muted">
+                <div
+                  className={`h-full rounded-full transition-all ${utilizationColor(
+                    (usage.cpu_used_cores / usage.cpu_limit_cores) * 100
+                  )}`}
+                  style={{ width: `${Math.min((usage.cpu_used_cores / usage.cpu_limit_cores) * 100, 100)}%` }}
+                />
+              </div>
+              {usage.cpu_requested_cores > 0 && (
+                <div className="text-[10px] text-muted-foreground">
+                  Request: {formatCpu(usage.cpu_requested_cores)}
+                </div>
+              )}
+            </div>
+          ) : container.requests_cpu || container.limits_cpu ? (
+            <div className="text-xs">
+              CPU — Used: {formatCpu(usage.cpu_used_cores)}
+              {container.requests_cpu && ` | Request: ${container.requests_cpu}`}
+              {container.limits_cpu && ` | Limit: ${container.limits_cpu}`}
+            </div>
+          ) : null}
+
+          {hasMemLimit ? (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Memory</span>
+                <span className={`font-mono ${utilizationTextColor(
+                  (usage.memory_working_set_bytes / usage.memory_limit_bytes) * 100
+                )}`}>
+                  {formatBytes(usage.memory_working_set_bytes)} / {formatBytes(usage.memory_limit_bytes)}
+                </span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-muted">
+                <div
+                  className={`h-full rounded-full transition-all ${utilizationColor(
+                    (usage.memory_working_set_bytes / usage.memory_limit_bytes) * 100
+                  )}`}
+                  style={{ width: `${Math.min((usage.memory_working_set_bytes / usage.memory_limit_bytes) * 100, 100)}%` }}
+                />
+              </div>
+              {usage.memory_requested_bytes > 0 && (
+                <div className="text-[10px] text-muted-foreground">
+                  Request: {formatBytes(usage.memory_requested_bytes)}
+                </div>
+              )}
+            </div>
+          ) : container.requests_memory || container.limits_memory ? (
+            <div className="text-xs">
+              Memory — Used: {formatBytes(usage.memory_working_set_bytes)}
+              {container.requests_memory && ` | Request: ${container.requests_memory}`}
+              {container.limits_memory && ` | Limit: ${container.limits_memory}`}
+            </div>
+          ) : null}
+        </div>
+      </DetailRow>
+    </>
+  );
+}
+
 export function PodDetail() {
   const selectedPod = useClusterStore((s) => s.selectedPod);
   const [detail, setDetail] = useState<PodDetailInfo | null>(null);
@@ -509,6 +702,10 @@ export function PodDetail() {
   const [historyContainer, setHistoryContainer] = useState<string | null>(null);
   const [pfOpen, setPfOpen] = useState(false);
   const [pfPort, setPfPort] = useState<number | undefined>();
+  const [metrics, setMetrics] = useState<PodMetricsType | null>(null);
+  const [metricsTimeRange, setMetricsTimeRange] = useState(60);
+  const [nodeMetrics, setNodeMetrics] = useState<NodeMetricsType | null>(null);
+  const [containerUsage, setContainerUsage] = useState<ContainerUsageSummary | null>(null);
 
   const fetchDetail = useCallback(async () => {
     if (!selectedPod) return;
@@ -549,6 +746,42 @@ export function PodDetail() {
   const activeContext = useClusterStore((s) => s.activeContext);
   const activeNamespace = useClusterStore((s) => s.activeNamespace);
 
+  // Fetch New Relic metrics (silent failure if not configured)
+  const fetchMetrics = useCallback(async () => {
+    if (!selectedPod || !activeNamespace || !activeContext) return;
+    try {
+      const result = await newrelicGetPodMetrics(activeContext, selectedPod, activeNamespace, metricsTimeRange);
+      setMetrics(result);
+    } catch {
+      setMetrics(null);
+    }
+  }, [selectedPod, activeContext, activeNamespace, metricsTimeRange]);
+
+  useEffect(() => {
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchMetrics]);
+
+  // Fetch node metrics (silent failure)
+  useEffect(() => {
+    if (!activeContext || !detail?.node) { setNodeMetrics(null); return; }
+    newrelicGetNodeMetrics(activeContext)
+      .then((nodes) => {
+        const match = nodes.find((n) => n.node_name === detail.node);
+        setNodeMetrics(match ?? null);
+      })
+      .catch(() => setNodeMetrics(null));
+  }, [activeContext, detail?.node]);
+
+  // Fetch container usage (silent failure)
+  useEffect(() => {
+    if (!selectedPod || !activeNamespace || !activeContext) { setContainerUsage(null); return; }
+    newrelicGetContainerUsage(activeContext, selectedPod, activeNamespace)
+      .then(setContainerUsage)
+      .catch(() => setContainerUsage(null));
+  }, [activeContext, selectedPod, activeNamespace]);
+
   if (!selectedPod) return null;
 
   const handleExecShell = (container: string) => {
@@ -576,6 +809,11 @@ export function PodDetail() {
         <div className="flex items-center gap-2 pr-8">
           <SheetTitle className="truncate font-mono">{selectedPod}</SheetTitle>
           <div className="ml-auto flex shrink-0 items-center gap-1">
+            <AskClaudeButton
+              gatherContext={() => gatherPodContext(selectedPod, activeContext ?? "", activeNamespace ?? "")}
+              resourceKind="Pod"
+              resourceName={selectedPod}
+            />
             <Button variant="outline" size="sm" onClick={() => setYamlOpen(true)}>
               <FileCode className="h-3.5 w-3.5" />
               Edit YAML
@@ -704,6 +942,9 @@ export function PodDetail() {
                   </div>
                 </div>
               </section>
+
+              {/* Node Metrics (New Relic) */}
+              {nodeMetrics && <NodeMetricsCard nodeMetrics={nodeMetrics} />}
 
               {/* Volumes */}
               {detail.volumes.length > 0 && (
@@ -865,35 +1106,49 @@ export function PodDetail() {
                             </span>
                           </DetailRow>
                         )}
-                        {(container.requests_cpu || container.requests_memory) && (
-                          <DetailRow label="Requests">
-                            {[
-                              container.requests_cpu &&
-                                `CPU: ${container.requests_cpu}`,
-                              container.requests_memory &&
-                                `Memory: ${container.requests_memory}`,
-                            ]
-                              .filter(Boolean)
-                              .join(", ")}
-                          </DetailRow>
-                        )}
-                        {(container.limits_cpu || container.limits_memory) && (
-                          <DetailRow label="Limits">
-                            {[
-                              container.limits_cpu &&
-                                `CPU: ${container.limits_cpu}`,
-                              container.limits_memory &&
-                                `Memory: ${container.limits_memory}`,
-                            ]
-                              .filter(Boolean)
-                              .join(", ")}
-                          </DetailRow>
-                        )}
+                        <ContainerResourceBars
+                          container={container}
+                          usage={containerUsage?.containers.find(
+                            (c) => c.container_name === container.name
+                          )}
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
               </section>
+
+              {/* Metrics (New Relic) */}
+              {metrics && metrics.timeseries.length > 0 && (
+                <section>
+                  <SectionHeader>Metrics</SectionHeader>
+                  <div className="rounded-lg border border-border p-4">
+                    <div className="mb-3 flex items-center gap-1">
+                      {[15, 60, 360].map((mins) => (
+                        <Button
+                          key={mins}
+                          variant={metricsTimeRange === mins ? "default" : "outline"}
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => setMetricsTimeRange(mins)}
+                        >
+                          {mins < 60 ? `${mins}m` : `${mins / 60}h`}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="mb-1 text-xs font-medium text-muted-foreground">CPU</p>
+                        <MetricsChart timeseries={metrics.timeseries} metric="cpu" />
+                      </div>
+                      <div>
+                        <p className="mb-1 text-xs font-medium text-muted-foreground">Memory</p>
+                        <MetricsChart timeseries={metrics.timeseries} metric="memory" />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
 
               {/* Events */}
               {detail.events.length > 0 && (

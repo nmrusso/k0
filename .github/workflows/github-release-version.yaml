@@ -3,7 +3,7 @@ name: Release Version
 on:
   push:
     branches:
-      - master
+      - main
   workflow_dispatch:
 
 permissions:
@@ -29,11 +29,4 @@ jobs:
         with:
           disable-changelog: true
           node-module: true
-          release-branches: '["master"]'
-
-  build:
-    needs: release
-    if: ${{ needs.release.result == 'success' }}
-    uses: ./.github/workflows/build.yml
-    permissions:
-      contents: write
+          release-branches: '["main"]'

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -35,7 +34,10 @@ export function ChatViewer({ tab }: ChatViewerProps) {
     tab.id,
     initialMessage,
     tab.context ?? activeContext ?? undefined,
-    undefined,
+    tab.resourceKind && tab.resourceName
+      ? `${tab.resourceKind}/${tab.resourceName}`
+      : undefined,
+    tab.resourceContext,
   );
 
   // Auto-scroll to bottom on new messages
@@ -107,8 +109,15 @@ export function ChatViewer({ tab }: ChatViewerProps) {
       <ScrollArea className="flex-1">
         <div ref={scrollRef} className="flex flex-col gap-3 p-3">
           {messages.length === 0 && (
-            <div className="flex flex-1 items-center justify-center py-8 text-sm text-muted-foreground">
-              Send a message to start chatting with the AI assistant.
+            <div className="flex flex-1 flex-col items-center justify-center gap-1 py-8 text-sm text-muted-foreground">
+              {tab.resourceKind && tab.resourceName ? (
+                <>
+                  <span>Context loaded for <span className="font-mono text-foreground">{tab.resourceKind}/{tab.resourceName}</span></span>
+                  <span>Ask a question about this resource.</span>
+                </>
+              ) : (
+                <span>Send a message to start chatting with the AI assistant.</span>
+              )}
             </div>
           )}
           {messages.map((msg) => (

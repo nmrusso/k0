@@ -66,7 +66,12 @@ impl ConfigDB {
     fn db_path() -> Result<PathBuf, String> {
         let data_dir = dirs::data_dir()
             .ok_or_else(|| "Could not find data directory".to_string())?;
-        Ok(data_dir.join("k0").join("config.db"))
+        let db_name = if cfg!(debug_assertions) {
+            "config.dev.db"
+        } else {
+            "k0.db"
+        };
+        Ok(data_dir.join("k0").join(db_name))
     }
 
     pub fn get(&self, key: &str) -> Result<Option<String>, String> {

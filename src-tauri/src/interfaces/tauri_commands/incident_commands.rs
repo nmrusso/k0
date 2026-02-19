@@ -47,3 +47,18 @@ pub async fn get_rollout_timeline(
         .await
         .map_err(Into::into)
 }
+
+#[tauri::command]
+pub async fn get_namespace_events(
+    since_minutes: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<Vec<NamespaceEventInfo>, String> {
+    let (client, ns) = state
+        .client_manager
+        .get_active_client()
+        .await
+        .map_err(String::from)?;
+    IncidentHandler::get_namespace_events(&client, &ns, since_minutes)
+        .await
+        .map_err(Into::into)
+}

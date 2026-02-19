@@ -50,6 +50,11 @@
 - Pod conditions and events
 - Owner references (links to parent workloads)
 - Image history tracking per container
+- **New Relic Metrics** (when configured):
+  - CPU and memory trend charts with selectable time range (15m, 1h, 6h)
+  - Node resource utilization bars (CPU, memory, disk) for the pod's host node
+  - Per-container resource usage vs limits with color-coded bars (green/yellow/red)
+  - Auto-refresh every 60 seconds
 
 ### Ingress Detail
 - TLS configuration
@@ -107,6 +112,82 @@
 - Pod status indicators
 - Click-to-navigate to any resource
 
+## Observability (New Relic Integration)
+
+### Namespace Metrics Dashboard
+- Accessible via "Observability" item in the sidebar
+- Pod-level CPU and memory metrics table for the selected namespace
+- Sortable columns (pod name, CPU, memory) with inline sparkline charts
+- Human-readable formatting for CPU (µ/m/cores) and memory (B/Ki/Mi/Gi)
+- Selectable time range: 15 minutes, 1 hour, 6 hours
+- Auto-refresh every 60 seconds
+
+### Active Alerts
+- Displays open New Relic incidents for the current cluster
+- Color-coded priority indicators (red for critical, yellow for warning)
+- Shows condition name, policy name, target name, and time elapsed
+- Scrollable alert list with count badge
+
+### Node Metrics
+- Per-node resource utilization in pod detail view
+- CPU, memory, and disk usage bars with actual vs allocatable values
+- Pod capacity information (allocatable/capacity)
+- CPU utilization percentage with color-coded thresholds
+
+### Container Resource Usage
+- Detailed per-container CPU and memory metrics
+- Usage vs limits with color-coded utilization bars:
+  - Green: below 70%
+  - Yellow: 70-90%
+  - Red: 90% and above
+- Displays actual usage, limits, and request values
+
+### New Relic Configuration
+- Per-context/cluster credentials (API key, account ID, cluster name)
+- Configured via Settings dialog with dedicated New Relic section
+- Credentials stored securely in local SQLite database
+- Connects to New Relic NerdGraph GraphQL API
+- Data sources: K8sContainerSample, K8sNodeSample, NrAiIncident
+
+## Events View
+
+### Namespace Events Browser
+- Standalone events view accessible from the sidebar (Bell icon)
+- Fetches Kubernetes events for the active namespace via the Events API
+- Configurable time range: 30 minutes, 1 hour, 3 hours, 24 hours, or all events
+- Time range changes trigger a fresh fetch from the backend
+
+### Filtering & Search
+- **Event type filter**: All / Normal / Warning (client-side)
+- **Kind filter**: Dynamic dropdown populated from fetched data (Pod, Deployment, ReplicaSet, etc.)
+- **Text search**: Filters across event name, message, and reason fields
+- Live event count display reflecting active filters
+
+### Events Table
+- Columns: Type (badge), Kind, Name, Reason, Message, Count, Age
+- Warning events displayed with destructive badge, Normal with secondary badge
+- Refresh button for manual re-fetch
+- Empty state when no events match current filters
+
+## Claude Code Integration
+
+### AI Assistant Chat
+- Built-in chat drawer powered by Claude Code CLI
+- Context-aware conversations: automatically gathers resource data (YAML, status, events, logs) before asking
+- "Ask Claude" button available in resource detail views (Pod, Generic Resource, etc.)
+- Streaming responses with real-time text display and thinking indicator
+- Multi-turn conversations with message history per session
+
+### Chat Actions
+- Claude can propose Kubernetes actions (scale, restart, patch) via action request cards
+- Actions require explicit user approval before execution
+- Action results displayed inline in the conversation
+
+### Claude CLI Status
+- Status indicator in the top bar showing Claude CLI availability
+- Green dot when CLI is detected, red dot with install link when not found
+- Automatic detection on app startup
+
 ## Terminal & Logs
 
 ### Log Streaming
@@ -145,6 +226,9 @@
 - **Terminal Font Family**: Custom font selection
 - **Terminal Shell Path**: Configure shell binary (/bin/sh, /bin/bash, /bin/zsh)
 - **Default Expanded Categories**: Configure which sidebar sections start expanded
+- **New Relic API Key**: Per-context API key for New Relic access
+- **New Relic Account ID**: Per-context New Relic account identifier
+- **New Relic Cluster Name**: Cluster name as it appears in New Relic (clusterName attribute)
 
 ### Persistent Storage
 - Settings stored in local SQLite database

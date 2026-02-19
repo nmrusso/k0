@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { startChatSession, stopChatSession } from "@/lib/tauri-commands";
@@ -15,6 +14,7 @@ export function useChatStream(
   initialMessage: string | null,
   contextInfo?: string,
   activeResource?: string,
+  resourceContext?: string,
 ) {
   const getOrCreateSession = useChatStore((s) => s.getOrCreateSession);
   const startAssistantMessage = useChatStore((s) => s.startAssistantMessage);
@@ -117,9 +117,12 @@ export function useChatStream(
         return;
       }
 
+      // Mark as streaming before starting so the thinking indicator shows
+      setStreaming(sessionId, true);
+
       // Start the chat session
       try {
-        await startChatSession(sessionId, initialMessage!, contextInfo, activeResource);
+        await startChatSession(sessionId, initialMessage!, contextInfo, activeResource, resourceContext);
       } catch (e) {
         if (!cancelled) {
           const msgId = startAssistantMessage(sessionId);

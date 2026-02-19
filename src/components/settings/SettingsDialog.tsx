@@ -39,6 +39,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
   );
 
+  // Claude integration settings
+  const [claudePermissionMode, setClaudePermissionMode] = useState("text_only");
+
   // Sidebar default expanded categories
   const ALL_SIDEBAR_CATEGORIES = [
     "Namespaces", "Workloads", "Network", "Config", "Storage", "Access Control", "Custom Resources",
@@ -53,12 +56,41 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [kubeconfigPaths, setKubeconfigPaths] = useState<string[]>([]);
   const [newKubeconfigPath, setNewKubeconfigPath] = useState("");
 
+  // New Relic settings (per-context)
+  const [nrContext, setNrContext] = useState("");
+  const [newrelicApiKey, setNewrelicApiKey] = useState("");
+  const [newrelicAccountId, setNewrelicAccountId] = useState("");
+  const [newrelicClusterName, setNewrelicClusterName] = useState("");
+
   // Helm chart paths
   const [helmContext, setHelmContext] = useState("");
   const [helmChartPaths, setHelmChartPaths] = useState<{ release: string; path: string; values: string }[]>([]);
   const [newHelmRelease, setNewHelmRelease] = useState("");
   const [newHelmPath, setNewHelmPath] = useState("");
   const [newHelmValues, setNewHelmValues] = useState("");
+
+  const loadNrConfig = useCallback(async (ctx: string) => {
+    if (!ctx) {
+      setNewrelicApiKey("");
+      setNewrelicAccountId("");
+      setNewrelicClusterName("");
+      return;
+    }
+    try {
+      const [key, id, cluster] = await Promise.all([
+        getConfig(`newrelic_api_key:${ctx}`),
+        getConfig(`newrelic_account_id:${ctx}`),
+        getConfig(`newrelic_cluster_name:${ctx}`),
+      ]);
+      setNewrelicApiKey(key || "");
+      setNewrelicAccountId(id || "");
+      setNewrelicClusterName(cluster || "");
+    } catch {
+      setNewrelicApiKey("");
+      setNewrelicAccountId("");
+      setNewrelicClusterName("");
+    }
+  }, []);
 
   const loadHelmPaths = useCallback(async (ctx: string) => {
     if (!ctx) {
@@ -97,6 +129,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         cfg["terminal_font_family"] ||
           "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
       );
+      setClaudePermissionMode(cfg["claude_permission_mode"] || "text_only");
       try {
         const expanded = cfg["sidebar_default_expanded"]
           ? JSON.parse(cfg["sidebar_default_expanded"])
@@ -160,6 +193,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         await deleteConfig("default_namespace");
       }
 
+      // Claude integration
+      await setConfig("claude_permission_mode", claudePermissionMode);
+
       // Terminal settings
       await setConfig("terminal_shell_path", terminalShellPath || "/bin/sh");
       await setConfig("terminal_font_size", terminalFontSize || "13");
@@ -210,6 +246,25 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         );
       } else {
         await deleteConfig("log_parser_level_mapping");
+      }
+
+      // New Relic settings — save for the currently selected NR context
+      if (nrContext) {
+        if (newrelicApiKey) {
+          await setConfig(`newrelic_api_key:${nrContext}`, newrelicApiKey);
+        } else {
+          await deleteConfig(`newrelic_api_key:${nrContext}`);
+        }
+        if (newrelicAccountId) {
+          await setConfig(`newrelic_account_id:${nrContext}`, newrelicAccountId);
+        } else {
+          await deleteConfig(`newrelic_account_id:${nrContext}`);
+        }
+        if (newrelicClusterName) {
+          await setConfig(`newrelic_cluster_name:${nrContext}`, newrelicClusterName);
+        } else {
+          await deleteConfig(`newrelic_cluster_name:${nrContext}`);
+        }
       }
 
       // Helm chart paths — save for the currently selected helm context
@@ -349,6 +404,34 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   onChange={(e) => setTerminalFontFamily(e.target.value)}
                   placeholder="monospace"
                 />
+              </div>
+            </section>
+
+            {/* Claude Integration */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold">Claude Integration</h3>
+              <p className="text-xs text-muted-foreground">
+                Configure what Claude can do when using "Ask Claude" on resources.
+                Requires <a href="https://docs.anthropic.com/en/docs/claude-code/overview" target="_blank" rel="noopener noreferrer" className="underline">Claude Code CLI</a> installed.
+              </p>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Permission Mode</label>
+                <Select value={claudePermissionMode} onValueChange={setClaudePermissionMode}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text_only">Text only (no tools)</SelectItem>
+                    <SelectItem value="allow_bash">Allow kubectl & helm</SelectItem>
+                    <SelectItem value="bypass_all">Bypass all permissions</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {claudePermissionMode === "text_only" && "Claude answers only from the pre-loaded resource context. No commands are executed."}
+                  {claudePermissionMode === "allow_bash" && "Claude can run kubectl and helm commands to gather additional information from the cluster."}
+                  {claudePermissionMode === "bypass_all" && "Claude has unrestricted access to all tools (file read/write, bash, etc). Use with caution."}
+                </p>
               </div>
             </section>
 
@@ -496,6 +579,71 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     </Button>
                   </div>
                 </div>
+              )}
+            </section>
+
+            {/* New Relic */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold">New Relic</h3>
+              <p className="text-xs text-muted-foreground">
+                Connect to New Relic for CPU/Memory metrics via NerdGraph API (per cluster)
+              </p>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Context</label>
+                <Select
+                  value={nrContext}
+                  onValueChange={(val) => {
+                    setNrContext(val);
+                    loadNrConfig(val);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a context" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contexts.map((ctx) => (
+                      <SelectItem key={ctx.name} value={ctx.name}>
+                        {ctx.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {nrContext && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">API Key</label>
+                    <Input
+                      type="password"
+                      value={newrelicApiKey}
+                      onChange={(e) => setNewrelicApiKey(e.target.value)}
+                      placeholder="NRAK-..."
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Account ID</label>
+                    <Input
+                      value={newrelicAccountId}
+                      onChange={(e) => setNewrelicAccountId(e.target.value)}
+                      placeholder="e.g. 1234567"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Cluster Name</label>
+                    <Input
+                      value={newrelicClusterName}
+                      onChange={(e) => setNewrelicClusterName(e.target.value)}
+                      placeholder="e.g. my-prod-cluster"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      The cluster name as it appears in New Relic (clusterName attribute)
+                    </p>
+                  </div>
+                </>
               )}
             </section>
 

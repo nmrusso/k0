@@ -35,6 +35,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { AskClaudeButton } from "@/components/resources/AskClaudeButton";
+import {
+  gatherDeploymentContext,
+  gatherNetworkResourceContext,
+  gatherGenericContext,
+} from "@/lib/chat-context";
 import { ErrorAlert, SectionHeader, IconButton, StatusDot } from "@/components/atoms";
 import { DetailRow } from "@/components/molecules";
 import type { GenericResourceDetailInfo } from "@/types/k8s";
@@ -485,7 +491,27 @@ export function GenericResourceDetail({ coords: coordsProp }: { coords?: Resourc
     fetchDetail();
   }, [fetchDetail]);
 
+  const activeContext = useClusterStore((s) => s.activeContext);
+  const activeNamespace = useClusterStore((s) => s.activeNamespace);
+
   const isDeployment = activeResource === "deployments" || coords?.kind === "Deployment";
+
+  const gatherContext = useCallback(async () => {
+    if (!coords || !selectedResourceName) return "";
+    const kind = coords.kind;
+    if (["Deployment", "StatefulSet", "DaemonSet"].includes(kind)) {
+      return gatherDeploymentContext(
+        selectedResourceName,
+        activeContext ?? "",
+        activeNamespace ?? "",
+        coords,
+      );
+    }
+    if (["Service", "Ingress", "Gateway"].includes(kind)) {
+      return gatherNetworkResourceContext(selectedResourceName, kind, coords);
+    }
+    return gatherGenericContext(selectedResourceName, kind, coords);
+  }, [selectedResourceName, coords, activeContext, activeNamespace]);
 
   if (!selectedResourceName || !coords) return null;
 
@@ -502,6 +528,11 @@ export function GenericResourceDetail({ coords: coordsProp }: { coords?: Resourc
           {isDeployment && selectedResourceName && (
             <DeploymentActions name={selectedResourceName} onRefresh={fetchDetail} />
           )}
+          <AskClaudeButton
+            gatherContext={gatherContext}
+            resourceKind={coords.kind}
+            resourceName={selectedResourceName}
+          />
           <Button variant="outline" size="sm" onClick={() => setYamlOpen(true)}>
             <FileCode className="h-3.5 w-3.5" />
             Edit YAML

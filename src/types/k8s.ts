@@ -579,6 +579,65 @@ export interface HelmRevision {
   description: string;
 }
 
+// New Relic metrics types
+export interface MetricDataPoint {
+  timestamp: number;
+  cpu_cores: number;
+  memory_bytes: number;
+}
+
+export interface PodMetrics {
+  pod_name: string;
+  cpu_usage_cores: number;
+  memory_usage_bytes: number;
+  cpu_limit_cores: number | null;
+  memory_limit_bytes: number | null;
+  timeseries: MetricDataPoint[];
+}
+
+export interface NamespaceMetricsSummary {
+  pods: PodMetrics[];
+}
+
+export interface NodeMetrics {
+  node_name: string;
+  cpu_used_cores: number;
+  allocatable_cpu_cores: number;
+  cpu_utilization_pct: number;
+  memory_working_set_bytes: number;
+  allocatable_memory_bytes: number;
+  fs_used_bytes: number;
+  fs_capacity_bytes: number;
+  allocatable_pods: number;
+  capacity_pods: number;
+}
+
+export interface ActiveAlert {
+  condition_name: string;
+  policy_name: string;
+  target_name: string;
+  priority: string;
+  open_time: number;
+}
+
+export interface ActiveAlertsSummary {
+  alerts: ActiveAlert[];
+}
+
+export interface ContainerUsage {
+  container_name: string;
+  cpu_used_cores: number;
+  cpu_limit_cores: number;
+  cpu_requested_cores: number;
+  memory_working_set_bytes: number;
+  memory_limit_bytes: number;
+  memory_requested_bytes: number;
+}
+
+export interface ContainerUsageSummary {
+  containers: ContainerUsage[];
+}
+
 export type ResourceType =
   | "pods"
   | "deployments"
@@ -624,4 +683,5 @@ export type ResourceType =
   | "log-errors"
   | "incident-mode"
   | "helm-releases"
+  | "observability"
   | (string & {});  // Allow CRD resource types like "crd:group/version/plural/scope"

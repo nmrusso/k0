@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type PanelTabType = "logs" | "shell" | "terminal";
+export type PanelTabType = "logs" | "shell" | "terminal" | "chat";
 
 export interface PanelTab {
   id: string;
@@ -20,6 +20,10 @@ export interface PanelTab {
   containerName?: string;
   context?: string;
   namespace?: string;
+  // Chat-specific
+  resourceKind?: string;
+  resourceName?: string;
+  resourceContext?: string;
 }
 
 const MAX_LOG_LINES = 50_000;
@@ -44,10 +48,13 @@ interface PanelState {
     namespace: string;
     title: string;
   }) => string;
-  // openChatTab: (params?: {
-  //   context?: string;
-  //   namespace?: string;
-  // }) => string;
+  openChatTab: (params: {
+    resourceKind: string;
+    resourceName: string;
+    resourceContext: string;
+    context?: string;
+    namespace?: string;
+  }) => string;
   openTerminalTab: (params?: {
     context?: string;
     namespace?: string;
@@ -115,25 +122,26 @@ export const usePanelStore = create<PanelState>((set) => ({
     return id;
   },
 
-  // openChatTab: (params) => {
-  //   const id = crypto.randomUUID();
-  //   const existingChats = usePanelStore.getState().tabs.filter((t) => t.type === "chat");
-  //   const num = existingChats.length + 1;
-  //   const title = `Chat ${num}`;
-  //   const tab: PanelTab = {
-  //     id,
-  //     type: "chat",
-  //     title,
-  //     context: params?.context ?? undefined,
-  //     namespace: params?.namespace ?? undefined,
-  //   };
-  //   set((s) => ({
-  //     isOpen: true,
-  //     tabs: [...s.tabs, tab],
-  //     activeTabId: id,
-  //   }));
-  //   return id;
-  // },
+  openChatTab: ({ resourceKind, resourceName, resourceContext, context, namespace }) => {
+    const id = crypto.randomUUID();
+    const title = `Ask Claude: ${resourceKind}/${resourceName}`;
+    const tab: PanelTab = {
+      id,
+      type: "chat",
+      title,
+      resourceKind,
+      resourceName,
+      resourceContext,
+      context: context ?? undefined,
+      namespace: namespace ?? undefined,
+    };
+    set((s) => ({
+      isOpen: true,
+      tabs: [...s.tabs, tab],
+      activeTabId: id,
+    }));
+    return id;
+  },
 
   openTerminalTab: (params) => {
     const id = crypto.randomUUID();
