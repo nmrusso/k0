@@ -1,6 +1,6 @@
 [package]
 name = "k0"
-version = "0.1.0"
+version = "1.1.0"
 description = "k0 - Kubernetes IDE"
 authors = ["Murzbul"]
 edition = "2021"
