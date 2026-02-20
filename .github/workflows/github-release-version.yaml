@@ -13,7 +13,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
 
-    # Skip if commit message contains 'chore(release):'
+    # Skip version bump commits to avoid infinite loop
     if: ${{ !contains(github.event.head_commit.message, 'chore(release):') }}
 
     steps:
@@ -23,10 +23,4 @@ jobs:
 
       - name: Release
         id: release
-        uses: ridedott/release-me-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          disable-changelog: true
-          node-module: true
-          release-branches: '["main"]'
+        uses: ./.github/actions/release-version

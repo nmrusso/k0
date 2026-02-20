@@ -1,16 +1,26 @@
 name: Build Binaries
 
 on:
-  release:
-    types: [published]
-  workflow_call:
+  push:
+    branches:
+      - main
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version override (e.g. 1.2.3)"
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   build:
+    # Only run on chore(release) commits or manual dispatch
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, 'chore(release):')
+
     strategy:
       fail-fast: false
       matrix:
@@ -29,6 +39,36 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            # Get latest semver tag
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            echo "value=${TAG#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync version in project files
+        if: steps.version.outputs.value != ''
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.value }}"
+          echo "Setting version to $VERSION"
+
+          # package.json
+          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
+
+          # src-tauri/tauri.conf.json
+          jq --arg v "$VERSION" '.version = $v' src-tauri/tauri.conf.json > tmp.json && mv tmp.json src-tauri/tauri.conf.json
+
+          # src-tauri/Cargo.toml
+          sed -i.bak 's/^version = ".*"/version = "'"$VERSION"'"/' src-tauri/Cargo.toml && rm -f src-tauri/Cargo.toml.bak
 
       # Linux system dependencies
       - name: Install Linux dependencies
@@ -71,14 +111,12 @@ jobs:
         with:
           args: --target ${{ matrix.rust_target }}
           updaterJsonPreferNsis: true
-          # Attach artifacts to the latest release when triggered by release event
-          tagName: ${{ github.event.release.tag_name || '' }}
-          releaseName: ${{ github.event.release.name || '' }}
-          releaseId: ${{ github.event.release.id || '' }}
+          tagName: v${{ steps.version.outputs.value }}
+          releaseName: v${{ steps.version.outputs.value }}
 
-      # Upload artifacts for non-release builds (workflow_dispatch / workflow_call)
+      # Upload artifacts for manual dispatch without version
       - name: Upload artifacts
-        if: github.event_name != 'release'
+        if: steps.version.outputs.value == ''
         uses: actions/upload-artifact@v4
         with:
           name: k0-${{ matrix.rust_target }}

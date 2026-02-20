@@ -1,0 +1,127 @@
+name: Release Version
+description: Bump version using conventional commits, update project files, create tag and GitHub release.
+
+outputs:
+  released:
+    description: Whether a release was created
+    value: ${{ steps.bump.outputs.released }}
+  version:
+    description: The new version (e.g. 1.2.3)
+    value: ${{ steps.bump.outputs.version }}
+  level:
+    description: The bump level (major, minor, patch)
+    value: ${{ steps.bump.outputs.level }}
+
+runs:
+  using: composite
+  steps:
+    - name: Determine version bump
+      id: bump
+      shell: bash
+      run: |
+        # Get the latest semver tag
+        LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+
+        if [[ -z "$LATEST_TAG" ]]; then
+          # No tags yet — start at 0.1.0
+          LATEST_TAG="v0.0.0"
+        fi
+
+        echo "Latest tag: $LATEST_TAG"
+
+        # Parse current version
+        VERSION="${LATEST_TAG#v}"
+        IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+        # Analyze commits since last tag
+        COMMITS=$(git log "${LATEST_TAG}..HEAD" --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
+
+        if [[ -z "$COMMITS" ]]; then
+          echo "No new commits since $LATEST_TAG"
+          echo "released=false" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "level=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Determine bump level from conventional commits
+        LEVEL="none"
+
+        while IFS= read -r msg; do
+          # Check for breaking changes
+          if echo "$msg" | grep -qiE '^[a-z]+(\(.+\))?!:' || echo "$msg" | grep -qi 'BREAKING CHANGE'; then
+            LEVEL="major"
+            break
+          fi
+          # Check for features
+          if echo "$msg" | grep -qE '^feat(\(.+\))?:'; then
+            if [[ "$LEVEL" != "major" ]]; then
+              LEVEL="minor"
+            fi
+          fi
+          # Check for fixes and other changes
+          if echo "$msg" | grep -qE '^(fix|perf|refactor|build|ci|docs|style|test|chore)(\(.+\))?:'; then
+            if [[ "$LEVEL" == "none" ]]; then
+              LEVEL="patch"
+            fi
+          fi
+        done <<< "$COMMITS"
+
+        if [[ "$LEVEL" == "none" ]]; then
+          echo "No conventional commits found, defaulting to patch"
+          LEVEL="patch"
+        fi
+
+        # Calculate new version
+        case "$LEVEL" in
+          major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+          minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+          patch) PATCH=$((PATCH + 1)) ;;
+        esac
+
+        NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+        echo "Bump: $LEVEL -> $NEW_VERSION"
+
+        echo "released=true" >> "$GITHUB_OUTPUT"
+        echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+        echo "level=$LEVEL" >> "$GITHUB_OUTPUT"
+
+    - name: Update project files
+      if: steps.bump.outputs.released == 'true'
+      shell: bash
+      run: |
+        VERSION="${{ steps.bump.outputs.version }}"
+
+        # package.json
+        jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
+
+        # src-tauri/tauri.conf.json
+        jq --arg v "$VERSION" '.version = $v' src-tauri/tauri.conf.json > tmp.json && mv tmp.json src-tauri/tauri.conf.json
+
+        # src-tauri/Cargo.toml — only first occurrence (the [package] version)
+        sed -i "0,/^version = \".*\"/s//version = \"$VERSION\"/" src-tauri/Cargo.toml
+
+    - name: Commit, tag, and push
+      if: steps.bump.outputs.released == 'true'
+      shell: bash
+      run: |
+        VERSION="${{ steps.bump.outputs.version }}"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
+        git commit -m "chore(release): v${VERSION}"
+        git tag "v${VERSION}"
+        git push origin HEAD --tags
+
+    - name: Create GitHub Release
+      if: steps.bump.outputs.released == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        VERSION="${{ steps.bump.outputs.version }}"
+        gh release create "v${VERSION}" \
+          --title "v${VERSION}" \
+          --generate-notes
