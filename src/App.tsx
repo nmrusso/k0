@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { getConfig, setActiveContext, setActiveNamespace as backendSetNamespace } from "@/lib/tauri-commands";
 import { useClusterStore } from "@/stores/clusterStore";
+import { useFavoritesStore } from "@/stores/favoritesStore";
 
 function App() {
   const setContext = useClusterStore((s) => s.setActiveContext);
@@ -31,6 +32,7 @@ function App() {
     }
 
     loadDefaults();
+    useFavoritesStore.getState().loadFavorites();
   }, [setContext, setNamespace]);
 
   return (

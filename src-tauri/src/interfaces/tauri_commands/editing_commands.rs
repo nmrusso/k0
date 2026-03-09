@@ -56,6 +56,22 @@ pub async fn patch_resource(
 }
 
 #[tauri::command]
+pub async fn delete_resource(
+    group: String,
+    version: String,
+    kind: String,
+    plural: String,
+    name: String,
+    cluster_scoped: Option<bool>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let (client, ns) = state.client_manager.get_active_client().await.map_err(String::from)?;
+    EditingHandler::delete_resource(&client, &ns, &name, &group, &version, &kind, &plural, cluster_scoped.unwrap_or(false))
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
 pub async fn get_resource_detail(
     group: String,
     version: String,

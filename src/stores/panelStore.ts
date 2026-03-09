@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type PanelTabType = "logs" | "shell" | "terminal" | "chat";
+export type PanelTabType = "logs" | "shell" | "terminal" | "chat" | "activity";
 
 export interface PanelTab {
   id: string;
@@ -59,6 +59,7 @@ interface PanelState {
     context?: string;
     namespace?: string;
   }) => string;
+  openActivityTab: () => string;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   appendLogLines: (tabId: string, lines: string[]) => void;
@@ -70,7 +71,7 @@ interface PanelState {
   setAvailableContainers: (tabId: string, containers: string[]) => void;
 }
 
-export const usePanelStore = create<PanelState>((set) => ({
+export const usePanelStore = create<PanelState>((set, get) => ({
   isOpen: false,
   height: 300,
   tabs: [],
@@ -145,7 +146,7 @@ export const usePanelStore = create<PanelState>((set) => ({
 
   openTerminalTab: (params) => {
     const id = crypto.randomUUID();
-    const existingTerminals = usePanelStore.getState().tabs.filter((t) => t.type === "terminal");
+    const existingTerminals = get().tabs.filter((t: PanelTab) => t.type === "terminal");
     const num = existingTerminals.length + 1;
     const ctxShort = params?.context
       ? params.context.length > 20
@@ -165,6 +166,18 @@ export const usePanelStore = create<PanelState>((set) => ({
       tabs: [...s.tabs, tab],
       activeTabId: id,
     }));
+    return id;
+  },
+
+  openActivityTab: () => {
+    const existing = get().tabs.find((t: PanelTab) => t.type === "activity");
+    if (existing) {
+      set({ isOpen: true, activeTabId: existing.id });
+      return existing.id;
+    }
+    const id = "activity";
+    const tab: PanelTab = { id, type: "activity", title: "Activity" };
+    set((s) => ({ isOpen: true, tabs: [...s.tabs, tab], activeTabId: id }));
     return id;
   },
 

@@ -973,7 +973,7 @@ export function GatewayDetail() {
           </>
         )}
         <div className="ml-auto flex items-center gap-1">
-          {!subView && (
+          {(!subView || subView.type === "listener") && (
             <Button variant="outline" size="sm" onClick={() => setYamlOpen(true)}>
               <FileCode className="h-3.5 w-3.5" />
               Edit YAML

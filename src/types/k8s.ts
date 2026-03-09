@@ -638,6 +638,40 @@ export interface ContainerUsageSummary {
   containers: ContainerUsage[];
 }
 
+// Minikube types
+export interface MinikubeProfile {
+  name: string;
+  status: string;
+  driver: string;
+  container_runtime: string;
+  kubernetes_version: string;
+  cpus: number;
+  memory: number;
+  nodes: number;
+  ip: string;
+}
+
+export interface MinikubeStatus {
+  name: string;
+  host: string;
+  kubelet: string;
+  apiserver: string;
+  kubeconfig: string;
+}
+
+export interface MinikubeAddon {
+  name: string;
+  enabled: boolean;
+  profile: string;
+}
+
+export interface MinikubeServiceEntry {
+  namespace: string;
+  name: string;
+  target_port: string;
+  url: string;
+}
+
 export type ResourceType =
   | "pods"
   | "deployments"
@@ -683,5 +717,6 @@ export type ResourceType =
   | "log-errors"
   | "incident-mode"
   | "helm-releases"
+  | "minikube"
   | "observability"
   | (string & {});  // Allow CRD resource types like "crd:group/version/plural/scope"

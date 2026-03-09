@@ -4,6 +4,7 @@ pub mod config;
 pub mod gateway;
 pub mod helm;
 pub mod incident;
+pub mod minikube;
 pub mod networking;
 pub mod pod;
 pub mod newrelic;

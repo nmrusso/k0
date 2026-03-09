@@ -75,6 +75,18 @@ const SheetContent = React.forwardRef<
       <SheetOverlay />
       <DialogPrimitive.Content
         ref={ref}
+        onPointerDownOutside={(e) => {
+          const target = (e as any).detail?.originalEvent?.target as HTMLElement | undefined;
+          if (target?.closest("[data-bottom-panel]")) {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          const target = (e as any).detail?.originalEvent?.target as HTMLElement | undefined;
+          if (target?.closest("[data-bottom-panel]")) {
+            e.preventDefault();
+          }
+        }}
         className={cn(
           "fixed inset-y-0 right-0 z-50 flex h-full flex-col border-l bg-background pl-2 shadow-lg transition-transform duration-300 ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
           !width && "w-1/2 min-w-[400px] max-w-[800px]",

@@ -5,7 +5,8 @@ import { PanelTabBar } from "./PanelTabBar";
 import { LogViewer } from "./LogViewer";
 import { TerminalViewer } from "./TerminalViewer";
 import { LocalTerminalViewer } from "./LocalTerminalViewer";
-import { Plus } from "lucide-react";
+import { ActivityViewer } from "./ActivityViewer";
+import { Plus, Eye } from "lucide-react";
 
 const MIN_HEIGHT = 150;
 const MAX_HEIGHT_RATIO = 0.7;
@@ -17,6 +18,7 @@ export function BottomPanel() {
   const tabs = usePanelStore((s) => s.tabs);
   const activeTabId = usePanelStore((s) => s.activeTabId);
   const openTerminalTab = usePanelStore((s) => s.openTerminalTab);
+  const openActivityTab = usePanelStore((s) => s.openActivityTab);
   const activeContext = useClusterStore((s) => s.activeContext);
   const activeNamespace = useClusterStore((s) => s.activeNamespace);
 
@@ -58,10 +60,10 @@ export function BottomPanel() {
     [height, setHeight],
   );
 
-  // When panel is closed, show the bottom bar with terminal + chat buttons
+  // When panel is closed, show the bottom bar with terminal + activity buttons
   if (!isOpen || tabs.length === 0) {
     return (
-      <div className="flex items-center border-t border-border bg-muted/30 px-2 py-0.5">
+      <div data-bottom-panel className="fixed bottom-0 left-0 right-0 z-[60] flex items-center border-t border-border bg-muted/30 px-2 py-0.5">
         <button
           onClick={() => openTerminalTab({ context: activeContext ?? undefined, namespace: activeNamespace ?? undefined })}
           className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -70,12 +72,20 @@ export function BottomPanel() {
           <Plus className="h-3.5 w-3.5" />
           <span>Terminal</span>
         </button>
+        <button
+          onClick={openActivityTab}
+          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title="Activity log"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          <span>Activity</span>
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col border-t border-border" style={{ height }}>
+    <div data-bottom-panel className="fixed bottom-0 left-0 right-0 z-[60] flex flex-col border-t border-border bg-background shadow-[0_-4px_12px_rgba(0,0,0,0.15)]" style={{ height }}>
       {/* Resize handle */}
       <div
         className="h-1 shrink-0 cursor-row-resize bg-border/50 transition-colors hover:bg-primary/40"
@@ -93,6 +103,7 @@ export function BottomPanel() {
             {tab.type === "logs" && <LogViewer tab={tab} />}
             {tab.type === "shell" && <TerminalViewer tab={tab} />}
             {tab.type === "terminal" && <LocalTerminalViewer tab={tab} />}
+            {tab.type === "activity" && <ActivityViewer />}
           </div>
         ))}
       </div>

@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { useTableSort } from "@/hooks/useTableSort";
+import { SortableHead } from "@/components/atoms";
 import {
   Table,
   TableBody,
@@ -18,7 +20,15 @@ import { ChevronDown, ChevronRight, Trash2, ScrollText, List, Network } from "lu
 import { deletePod } from "@/lib/tauri-commands";
 import { usePanelStore } from "@/stores/panelStore";
 import { cn } from "@/lib/utils";
+import { useTableKeyboard } from "@/hooks/useTableKeyboard";
+import { useChangedRows } from "@/hooks/useChangedRows";
+import { useMultiSelect } from "@/hooks/useMultiSelect";
+import { BulkActionToolbar } from "./BulkActionToolbar";
+import { BulkConfirmDialog } from "./BulkConfirmDialog";
 import type { PodInfo } from "@/types/k8s";
+
+const podKey = (p: PodInfo) => p.name;
+const podHash = (p: PodInfo) => `${p.status}|${p.restarts}|${p.ready}`;
 
 function statusVariant(status: string) {
   if (status === "Running" || status === "Succeeded") return "success" as const;
@@ -82,14 +92,31 @@ function PodRow({
   onSelect,
   onOpenLogs,
   onDelete,
+  rowProps,
+  changed,
+  checked,
+  onCheck,
 }: {
   pod: PodInfo;
   onSelect: () => void;
   onOpenLogs: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
+  rowProps?: { "data-focused": boolean; className: string };
+  changed?: boolean;
+  checked?: boolean;
+  onCheck?: (e: React.MouseEvent) => void;
 }) {
   return (
-    <TableRow className="cursor-pointer" onClick={onSelect}>
+    <TableRow className={cn("cursor-pointer", rowProps?.className, changed && "row-changed")} onClick={onSelect}>
+      <TableCell className="w-8" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => {}}
+          onClick={onCheck}
+          className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+        />
+      </TableCell>
       <TableCell className="font-mono text-xs">{pod.name}</TableCell>
       <TableCell>{pod.ready}</TableCell>
       <TableCell>
@@ -165,19 +192,34 @@ function PodCard({
 
 export function PodTable() {
   const { data, loading, error, refresh } = useResources<PodInfo>();
+  const { sortedItems, getSortProps } = useTableSort(data);
   const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
-    useInfiniteScroll({ items: data });
+    useInfiniteScroll({ items: sortedItems });
   const viewMode = useClusterStore((s) => s.viewMode);
   const setSelectedPod = useClusterStore((s) => s.setSelectedPod);
   const openLogTab = usePanelStore((s) => s.openLogTab);
+  const changedRows = useChangedRows(data, podKey, podHash);
+  const { selectedNames, toggleSelect, selectAll, clearSelection, isSelected, isAllSelected } =
+    useMultiSelect(visibleItems);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [flatView, setFlatView] = useState(true);
+
+  const { getRowProps } = useTableKeyboard<PodInfo>({
+    items: visibleItems,
+    onSelect: (pod) => setSelectedPod(pod.name),
+    onEscape: () => setSelectedPod(null),
+    actions: {
+      l: (pod) => openLogTab({ targetKind: "pod", targetName: pod.name, title: pod.name }),
+    },
+  });
 
   const groups = useMemo(() => groupPods(visibleItems), [visibleItems]);
 
   const handleDeletePod = (e: React.MouseEvent, podName: string) => {
     e.stopPropagation();
-    deletePod(podName).catch(console.error);
+    setDeleteTarget(podName);
   };
 
   const handleOpenLogs = (e: React.MouseEvent, podName: string) => {
@@ -241,30 +283,76 @@ export function PodTable() {
       onRefresh={refresh}
       extraControls={flatToggle}
     >
+      <BulkActionToolbar
+        selectedCount={selectedNames.size}
+        onClearSelection={clearSelection}
+        actions={[
+          {
+            label: "Delete",
+            icon: <Trash2 className="mr-1 h-3.5 w-3.5" />,
+            variant: "destructive",
+            onClick: () => setBulkDeleteOpen(true),
+          },
+        ]}
+      />
+      <BulkConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        action="delete"
+        resourceNames={Array.from(selectedNames)}
+        onConfirm={async () => {
+          await Promise.allSettled(Array.from(selectedNames).map((n) => deletePod(n)));
+          clearSelection();
+          refresh();
+        }}
+      />
+      <BulkConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        action="delete"
+        resourceNames={deleteTarget ? [deleteTarget] : []}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          await deletePod(deleteTarget);
+          refresh();
+        }}
+      />
       {flatView ? (
         // FLAT VIEW
         viewMode === "table" ? (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Ready</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Restarts</TableHead>
-                <TableHead>IP</TableHead>
-                <TableHead>Node</TableHead>
-                <TableHead>Age</TableHead>
+                <TableHead className="w-8">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={() => isAllSelected ? clearSelection() : selectAll()}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                  />
+                </TableHead>
+                <SortableHead label="Name" {...getSortProps("name")} />
+                <SortableHead label="Ready" {...getSortProps("ready")} />
+                <SortableHead label="Status" {...getSortProps("status")} />
+                <SortableHead label="Restarts" {...getSortProps("restarts")} />
+                <SortableHead label="IP" {...getSortProps("ip")} />
+                <SortableHead label="Node" {...getSortProps("node")} />
+                <SortableHead label="Age" {...getSortProps("age")} />
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visibleItems.map((pod) => (
+              {visibleItems.map((pod, idx) => (
                 <PodRow
                   key={pod.name}
                   pod={pod}
                   onSelect={() => setSelectedPod(pod.name)}
                   onOpenLogs={(e) => handleOpenLogs(e, pod.name)}
                   onDelete={(e) => handleDeletePod(e, pod.name)}
+                  rowProps={getRowProps(idx)}
+                  checked={isSelected(pod.name)}
+                  onCheck={(e) => { e.stopPropagation(); toggleSelect(pod.name); }}
+                  changed={changedRows.has(pod.name)}
                 />
               ))}
             </TableBody>

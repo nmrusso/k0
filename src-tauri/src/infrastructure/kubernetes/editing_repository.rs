@@ -99,3 +99,19 @@ pub async fn patch_resource(
     api.patch(name, &pp, &patch).await?;
     Ok(())
 }
+
+pub async fn delete_resource(
+    client: &Client,
+    ns: &str,
+    name: &str,
+    group: &str,
+    version: &str,
+    kind: &str,
+    plural: &str,
+    cluster_scoped: bool,
+) -> Result<(), DomainError> {
+    let ar = build_api_resource(group, version, kind, plural);
+    let api = build_api(client, ns, &ar, cluster_scoped);
+    api.delete(name, &Default::default()).await?;
+    Ok(())
+}

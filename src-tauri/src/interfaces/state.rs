@@ -13,6 +13,7 @@ pub struct AppState {
     pub log_sessions: Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
     pub chat_sessions: Arc<Mutex<HashMap<String, ChatSession>>>,
     pub port_forwards: Arc<Mutex<HashMap<String, (PortForwardEntry, std::process::Child)>>>,
+    pub minikube_sessions: Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
     pub config_db: Arc<ConfigDB>,
 }
 
@@ -25,6 +26,7 @@ impl AppState {
             log_sessions: Arc::new(Mutex::new(HashMap::new())),
             chat_sessions: Arc::new(Mutex::new(HashMap::new())),
             port_forwards: Arc::new(Mutex::new(HashMap::new())),
+            minikube_sessions: Arc::new(Mutex::new(HashMap::new())),
             config_db,
         }
     }

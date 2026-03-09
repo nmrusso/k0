@@ -49,6 +49,19 @@ impl EditingHandler {
         editing_repository::patch_resource(client, ns, name, group, version, kind, plural, patch_json, cluster_scoped).await
     }
 
+    pub async fn delete_resource(
+        client: &Client,
+        ns: &str,
+        name: &str,
+        group: &str,
+        version: &str,
+        kind: &str,
+        plural: &str,
+        cluster_scoped: bool,
+    ) -> Result<(), DomainError> {
+        editing_repository::delete_resource(client, ns, name, group, version, kind, plural, cluster_scoped).await
+    }
+
     pub async fn get_generic_resource_detail(
         client: &Client,
         namespace: &str,

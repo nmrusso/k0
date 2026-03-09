@@ -1,11 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useClusterStore } from "@/stores/clusterStore";
+import { useFavoritesStore } from "@/stores/favoritesStore";
+import { useTabStore } from "@/stores/tabStore";
 import type { ResourceType } from "@/types/k8s";
 import { getNamespaces, getCRDs, getConfig } from "@/lib/tauri-commands";
 import { setActiveNamespace } from "@/lib/tauri-commands";
 import type { NamespaceInfo, CRDInfo } from "@/types/k8s";
 import {
+  Star,
+  X,
   Box,
   Rocket,
   Shield,
@@ -167,9 +171,14 @@ export function Sidebar() {
   const activeContext = useClusterStore((s) => s.activeContext);
   const activeNamespace = useClusterStore((s) => s.activeNamespace);
   const activeResource = useClusterStore((s) => s.activeResource);
-  const setActiveResource = useClusterStore((s) => s.setActiveResource);
+  const openTab = useTabStore((s) => s.openTab);
   const setStoreNamespace = useClusterStore((s) => s.setActiveNamespace);
   const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
+  const setSelectedPod = useClusterStore((s) => s.setSelectedPod);
+  const setSelectedIngress = useClusterStore((s) => s.setSelectedIngress);
+  const setSelectedGateway = useClusterStore((s) => s.setSelectedGateway);
+  const favorites = useFavoritesStore((s) => s.favorites);
+  const removeFavorite = useFavoritesStore((s) => s.removeFavorite);
 
   const [nsExpanded, setNsExpanded] = useState(false);
   const [namespaces, setNamespaces] = useState<NamespaceInfo[]>([]);
@@ -229,9 +238,14 @@ export function Sidebar() {
   };
 
   const handleSelectCRD = (crd: CRDInfo) => {
-    setActiveResource(`crd:${crd.group}/${crd.version}/${crd.plural}/${crd.scope}` as ResourceType);
+    openTab(`crd:${crd.group}/${crd.version}/${crd.plural}/${crd.scope}` as ResourceType);
     setSelectedResourceName(null);
   };
+
+  const contextFavorites = useMemo(
+    () => favorites.filter((f) => f.context === activeContext),
+    [favorites, activeContext],
+  );
 
   const categories = [...new Set(resources.map((r) => r.category))];
 
@@ -320,11 +334,45 @@ export function Sidebar() {
             </div>
           )}
 
+          {/* Pinned / Favorites section */}
+          {activeContext && contextFavorites.length > 0 && (
+            <div className="mb-3">
+              <div className="mb-1 flex items-center gap-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-yellow-400/80">
+                <Star className="h-3 w-3 fill-current" />
+                Pinned
+              </div>
+              {contextFavorites.map((fav) => (
+                <button
+                  key={fav.id}
+                  onClick={() => {
+                    openTab(fav.resourceType);
+                    if (fav.resourceType === "pods") setSelectedPod(fav.name);
+                    else if (fav.resourceType === "ingresses") setSelectedIngress(fav.name);
+                    else if (fav.resourceType === "gateways") setSelectedGateway(fav.name);
+                    else setSelectedResourceName(fav.name);
+                  }}
+                  className="group flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50"
+                >
+                  <span className="truncate flex-1 text-left">{fav.label}</span>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeFavorite(fav.id);
+                    }}
+                    className="shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted"
+                  >
+                    <X className="h-3 w-3" />
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Overview button */}
           {activeContext && activeNamespace && (
             <div className="mb-3">
               <button
-                onClick={() => setActiveResource("overview" as ResourceType)}
+                onClick={() => openTab("overview" as ResourceType)}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
                   activeResource === "overview"
@@ -342,7 +390,7 @@ export function Sidebar() {
           {activeContext && (
             <div className="mb-3">
               <button
-                onClick={() => setActiveResource("log-errors" as ResourceType)}
+                onClick={() => openTab("log-errors" as ResourceType)}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
                   activeResource === "log-errors"
@@ -360,7 +408,7 @@ export function Sidebar() {
           {activeContext && (
             <div className="mb-3">
               <button
-                onClick={() => setActiveResource("incident-mode" as ResourceType)}
+                onClick={() => openTab("incident-mode" as ResourceType)}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
                   activeResource === "incident-mode"
@@ -378,7 +426,7 @@ export function Sidebar() {
           {activeContext && activeNamespace && (
             <div className="mb-3">
               <button
-                onClick={() => setActiveResource("helm-releases" as ResourceType)}
+                onClick={() => openTab("helm-releases" as ResourceType)}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
                   activeResource === "helm-releases"
@@ -392,11 +440,27 @@ export function Sidebar() {
             </div>
           )}
 
+          {/* Minikube button */}
+          <div className="mb-3">
+            <button
+              onClick={() => openTab("minikube" as ResourceType)}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+                activeResource === "minikube"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/50",
+              )}
+            >
+              <HardDrive className="h-4 w-4" />
+              Minikube
+            </button>
+          </div>
+
           {/* Observability button */}
           {activeContext && activeNamespace && (
             <div className="mb-3">
               <button
-                onClick={() => setActiveResource("observability" as ResourceType)}
+                onClick={() => openTab("observability" as ResourceType)}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
                   activeResource === "observability"
@@ -414,7 +478,7 @@ export function Sidebar() {
           {activeContext && activeNamespace && (
             <div className="mb-3">
               <button
-                onClick={() => setActiveResource("events" as ResourceType)}
+                onClick={() => openTab("events" as ResourceType)}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
                   activeResource === "events"
@@ -452,7 +516,7 @@ export function Sidebar() {
                   catItems.map((item) => (
                     <button
                       key={item.type}
-                      onClick={() => setActiveResource(item.type)}
+                      onClick={() => openTab(item.type)}
                       className={cn(
                         "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
                         activeResource === item.type

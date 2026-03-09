@@ -32,6 +32,7 @@ import {
   Minus,
   Plus,
   RefreshCcw,
+  Trash2,
 } from "lucide-react";
 import {
   scaleDeployment,
@@ -40,8 +41,21 @@ import {
   updateDeploymentResources,
   getExternalSecretsForDeployment,
   forceSyncExternalSecret,
+  deleteResource,
 } from "@/lib/tauri-commands";
+import { DEPLOYMENT_COORDS } from "@/lib/resource-coords";
+import { SortableHead } from "@/components/atoms";
+import { useTableSort } from "@/hooks/useTableSort";
+import { useTableKeyboard } from "@/hooks/useTableKeyboard";
+import { useChangedRows } from "@/hooks/useChangedRows";
+import { useMultiSelect } from "@/hooks/useMultiSelect";
+import { BulkActionToolbar } from "./BulkActionToolbar";
+import { BulkConfirmDialog } from "./BulkConfirmDialog";
+import { cn } from "@/lib/utils";
 import type { DeploymentInfo } from "@/types/k8s";
+
+const depKey = (d: DeploymentInfo) => d.name;
+const depHash = (d: DeploymentInfo) => `${d.ready}|${d.up_to_date}|${d.available}`;
 
 // --- Scale Dialog ---
 function ScaleDialog({
@@ -325,16 +339,33 @@ function ResourcesDialog({
 // --- Main DeploymentTable ---
 export function DeploymentTable() {
   const { data, loading, error, refresh } = useResources<DeploymentInfo>();
+  const { sortedItems, getSortProps } = useTableSort(data);
   const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
-    useInfiniteScroll({ items: data });
+    useInfiniteScroll({ items: sortedItems });
   const viewMode = useClusterStore((s) => s.viewMode);
   const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
   const openLogTab = usePanelStore((s) => s.openLogTab);
+
+  const changedRows = useChangedRows(data, depKey, depHash);
+
+  const { getRowProps } = useTableKeyboard<DeploymentInfo>({
+    items: visibleItems,
+    onSelect: (dep) => setSelectedResourceName(dep.name),
+    onEscape: () => setSelectedResourceName(null),
+    actions: {
+      l: (dep) => openLogTab({ targetKind: "deployment", targetName: dep.name, title: `deploy/${dep.name}` }),
+    },
+  });
+
+  const { selectedNames, toggleSelect, selectAll, clearSelection, isSelected, isAllSelected } =
+    useMultiSelect(visibleItems);
+  const [bulkRestartOpen, setBulkRestartOpen] = useState(false);
 
   const [scaleTarget, setScaleTarget] = useState<string | null>(null);
   const [resourcesTarget, setResourcesTarget] = useState<string | null>(null);
   const [restartingName, setRestartingName] = useState<string | null>(null);
   const [syncingName, setSyncingName] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const handleOpenLogs = (e: React.MouseEvent, name: string) => {
     e.stopPropagation();
@@ -425,6 +456,13 @@ export function DeploymentTable() {
       >
         <ScrollText className="h-4 w-4" />
       </IconButton>
+      <IconButton
+        onClick={(e) => { e.stopPropagation(); setDeleteTarget(name); }}
+        variant="destructive"
+        title={`Delete ${name}`}
+      >
+        <Trash2 className="h-4 w-4" />
+      </IconButton>
     </div>
   );
 
@@ -444,22 +482,63 @@ export function DeploymentTable() {
         hasMore={hasMore}
         sentinelRef={sentinelRef}
         onRefresh={refresh}
+        autoRefreshIntervalMs={30_000}
       >
+        <BulkActionToolbar
+          selectedCount={selectedNames.size}
+          onClearSelection={clearSelection}
+          actions={[
+            {
+              label: "Restart",
+              icon: <RotateCcw className="mr-1 h-3.5 w-3.5" />,
+              variant: "default",
+              onClick: () => setBulkRestartOpen(true),
+            },
+          ]}
+        />
+        <BulkConfirmDialog
+          open={bulkRestartOpen}
+          onOpenChange={setBulkRestartOpen}
+          action="restart"
+          resourceNames={Array.from(selectedNames)}
+          onConfirm={async () => {
+            await Promise.allSettled(Array.from(selectedNames).map((n) => restartDeployment(n)));
+            clearSelection();
+            refresh();
+          }}
+        />
         {viewMode === "table" ? (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Ready</TableHead>
-                <TableHead>Up-to-date</TableHead>
-                <TableHead>Available</TableHead>
-                <TableHead>Age</TableHead>
+                <TableHead className="w-8">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={() => isAllSelected ? clearSelection() : selectAll()}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                  />
+                </TableHead>
+                <SortableHead label="Name" {...getSortProps("name")} />
+                <SortableHead label="Ready" {...getSortProps("ready")} />
+                <SortableHead label="Up-to-date" {...getSortProps("up_to_date")} />
+                <SortableHead label="Available" {...getSortProps("available")} />
+                <SortableHead label="Age" {...getSortProps("age")} />
                 <TableHead className="w-28" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visibleItems.map((dep) => (
-                <TableRow key={dep.name} className="cursor-pointer" onClick={() => setSelectedResourceName(dep.name)}>
+              {visibleItems.map((dep, idx) => (
+                <TableRow key={dep.name} className={cn("cursor-pointer", getRowProps(idx).className, changedRows.has(dep.name) && "row-changed")} onClick={() => setSelectedResourceName(dep.name)}>
+                  <TableCell className="w-8" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected(dep.name)}
+                      onChange={() => {}}
+                      onClick={(e) => { e.stopPropagation(); toggleSelect(dep.name); }}
+                      className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                    />
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{dep.name}</TableCell>
                   <TableCell>{dep.ready}</TableCell>
                   <TableCell>{dep.up_to_date}</TableCell>
@@ -508,6 +587,17 @@ export function DeploymentTable() {
         onOpenChange={(open) => { if (!open) setResourcesTarget(null); }}
         deploymentName={resourcesTarget || ""}
         onDone={refresh}
+      />
+      <BulkConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        action="delete"
+        resourceNames={deleteTarget ? [deleteTarget] : []}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          await deleteResource(DEPLOYMENT_COORDS, deleteTarget);
+          refresh();
+        }}
       />
     </>
   );

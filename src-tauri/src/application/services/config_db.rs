@@ -69,7 +69,7 @@ impl ConfigDB {
         let db_name = if cfg!(debug_assertions) {
             "config.dev.db"
         } else {
-            "k0.db"
+            "config.db"
         };
         Ok(data_dir.join("k0").join(db_name))
     }

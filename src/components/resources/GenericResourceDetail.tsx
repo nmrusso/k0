@@ -25,7 +25,7 @@ import {
 import { CollapsibleBadgeList } from "@/components/ui/collapsible-badge-list";
 import {
   ArrowLeft, FileCode, Eye, EyeOff, ChevronRight, ChevronDown, ExternalLink,
-  RotateCcw, RefreshCcw, Scaling, ScrollText, Loader2, Minus, Plus,
+  RotateCcw, RefreshCcw, Scaling, ScrollText, Loader2, Minus, Plus, GitCompareArrows,
 } from "lucide-react";
 import {
   Dialog,
@@ -36,6 +36,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { AskClaudeButton } from "@/components/resources/AskClaudeButton";
+import { FavoriteButton } from "@/components/resources/FavoriteButton";
+import { ResourceDiffDialog } from "@/components/resources/ResourceDiffDialog";
 import {
   gatherDeploymentContext,
   gatherNetworkResourceContext,
@@ -462,6 +464,7 @@ export function GenericResourceDetail({ coords: coordsProp }: { coords?: Resourc
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [yamlOpen, setYamlOpen] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
 
   const coords = useMemo(() => {
     if (coordsProp) return coordsProp;
@@ -528,11 +531,16 @@ export function GenericResourceDetail({ coords: coordsProp }: { coords?: Resourc
           {isDeployment && selectedResourceName && (
             <DeploymentActions name={selectedResourceName} onRefresh={fetchDetail} />
           )}
+          <FavoriteButton resourceType={activeResource} resourceName={selectedResourceName} />
           <AskClaudeButton
             gatherContext={gatherContext}
             resourceKind={coords.kind}
             resourceName={selectedResourceName}
           />
+          <Button variant="outline" size="sm" onClick={() => setDiffOpen(true)}>
+            <GitCompareArrows className="h-3.5 w-3.5" />
+            Compare
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setYamlOpen(true)}>
             <FileCode className="h-3.5 w-3.5" />
             Edit YAML
@@ -696,6 +704,13 @@ export function GenericResourceDetail({ coords: coordsProp }: { coords?: Resourc
         resourceCoords={coords}
         resourceName={selectedResourceName}
         onSaved={fetchDetail}
+      />
+
+      <ResourceDiffDialog
+        open={diffOpen}
+        onOpenChange={setDiffOpen}
+        resourceCoords={coords}
+        sourceResourceName={selectedResourceName}
       />
     </div>
   );

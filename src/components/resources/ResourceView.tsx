@@ -18,11 +18,13 @@ import { SecretTable } from "./SecretTable";
 import { CRDInstanceTable } from "./CRDInstanceTable";
 import { GenericResourceTable } from "./GenericResourceTable";
 import { GenericResourceDetail } from "./GenericResourceDetail";
+import { WorkloadDetail } from "./WorkloadDetail";
 import { NetworkOverview } from "./NetworkOverview";
 import { DependencyOverview } from "./DependencyOverview";
 import { ErrorsDashboard } from "./ErrorsDashboard";
 import { IncidentDashboard } from "./IncidentDashboard";
 import { HelmReleasesView } from "./HelmReleasesView";
+import { MinikubeView } from "./MinikubeView";
 import { ObservabilityView } from "./ObservabilityView";
 import { EventsView } from "./EventsView";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -92,7 +94,7 @@ export function ResourceView() {
   const crdParts = isCRD ? activeResource.slice(4).split("/") : [];
   const crdLabel = isCRD ? crdParts[crdParts.length - 2] || activeResource : "";
   const isCRDClusterScoped = isCRD && crdParts[crdParts.length - 1] === "Cluster";
-  const isOverview = activeResource === "overview" || activeResource === "network-overview" || activeResource === "log-errors" || activeResource === "incident-mode" || activeResource === "helm-releases" || activeResource === "observability" || activeResource === "events";
+  const isOverview = activeResource === "overview" || activeResource === "network-overview" || activeResource === "log-errors" || activeResource === "incident-mode" || activeResource === "helm-releases" || activeResource === "minikube" || activeResource === "observability" || activeResource === "events";
   const isClusterScopedResource = isCRDClusterScoped || CLUSTER_SCOPED_RESOURCES.has(activeResource);
 
   if (!activeContext) {
@@ -150,6 +152,10 @@ export function ResourceView() {
 
   if (activeResource === "helm-releases") {
     return <HelmReleasesView />;
+  }
+
+  if (activeResource === "minikube") {
+    return <MinikubeView />;
   }
 
   if (activeResource === "observability") {
@@ -221,9 +227,21 @@ export function ResourceView() {
         </SheetContent>
       </Sheet>
 
-      {/* Generic resource detail drawer (for non-pod/ingress/gateway resources with coords) */}
+      {/* Workload detail drawer (StatefulSet, DaemonSet, Job, CronJob) */}
       <Sheet
-        open={!!selectedResourceName && activeResource !== "pods" && activeResource !== "ingresses" && activeResource !== "gateways" && (activeResource in RESOURCE_COORDS_MAP || isCRD)}
+        open={!!selectedResourceName && ["daemonsets", "statefulsets", "jobs", "cronjobs"].includes(activeResource)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedResourceName(null);
+        }}
+      >
+        <SheetContent>
+          <WorkloadDetail />
+        </SheetContent>
+      </Sheet>
+
+      {/* Generic resource detail drawer (for non-pod/ingress/gateway/workload resources with coords) */}
+      <Sheet
+        open={!!selectedResourceName && activeResource !== "pods" && activeResource !== "ingresses" && activeResource !== "gateways" && !["daemonsets", "statefulsets", "jobs", "cronjobs"].includes(activeResource) && (activeResource in RESOURCE_COORDS_MAP || isCRD)}
         onOpenChange={(open) => {
           if (!open) setSelectedResourceName(null);
         }}

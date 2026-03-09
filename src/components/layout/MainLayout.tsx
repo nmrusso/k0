@@ -6,6 +6,12 @@ import { Sidebar } from "./Sidebar";
 import { ResourceView } from "@/components/resources/ResourceView";
 import { BottomPanel } from "@/components/panel/BottomPanel";
 import { ChatDrawer } from "@/components/chat/ChatDrawer";
+import { usePanelStore } from "@/stores/panelStore";
+import { useHotkeys } from "@/hooks/useHotkeys";
+import { useClusterStore } from "@/stores/clusterStore";
+import { useTabStore } from "@/stores/tabStore";
+import { TabBar } from "./TabBar";
+import { CommandPalette } from "@/components/resources/CommandPalette";
 
 function UpdateBanner({
   version,
@@ -45,6 +51,50 @@ function UpdateBanner({
 }
 
 export function MainLayout() {
+  const panelIsOpen = usePanelStore((s) => s.isOpen);
+  const panelHeight = usePanelStore((s) => s.height);
+  const panelTabs = usePanelStore((s) => s.tabs);
+  const bottomPadding = panelIsOpen && panelTabs.length > 0 ? panelHeight : 28;
+
+  // Global keyboard shortcuts
+  const setSelectedPod = useClusterStore((s) => s.setSelectedPod);
+  const setSelectedIngress = useClusterStore((s) => s.setSelectedIngress);
+  const setSelectedGateway = useClusterStore((s) => s.setSelectedGateway);
+  const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
+
+  // Sync active tab → clusterStore.activeResource
+  const activeTab = useTabStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    return tab ?? null;
+  });
+  const setActiveResource = useClusterStore((s) => s.setActiveResource);
+
+  useEffect(() => {
+    if (activeTab) {
+      setActiveResource(activeTab.resourceType);
+    }
+  }, [activeTab?.id, activeTab?.resourceType, setActiveResource]);
+
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useHotkeys({
+    "Cmd+k": (e) => {
+      e.preventDefault();
+      setPaletteOpen(true);
+    },
+    "Ctrl+k": (e) => {
+      e.preventDefault();
+      setPaletteOpen(true);
+    },
+    Escape: () => {
+      // Close any open detail sheet
+      setSelectedPod(null);
+      setSelectedIngress(null);
+      setSelectedGateway(null);
+      setSelectedResourceName(null);
+    },
+  });
+
   const [update, setUpdate] = useState<{
     version: string;
     downloadAndInstall: () => Promise<void>;
@@ -89,13 +139,17 @@ export function MainLayout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <Sidebar />
-          <main className="flex-1 overflow-auto bg-background p-4">
-            <ResourceView />
-          </main>
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <TabBar />
+            <main className="flex-1 overflow-auto bg-background p-4" style={{ paddingBottom: bottomPadding + 16 }}>
+              <ResourceView />
+            </main>
+          </div>
         </div>
-        <BottomPanel />
       </div>
+      <BottomPanel />
       <ChatDrawer />
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );
 }

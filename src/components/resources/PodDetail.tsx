@@ -29,8 +29,11 @@ import {
   Terminal,
   ScrollText,
   ArrowUpRight,
+  GitCompareArrows,
 } from "lucide-react";
 import { AskClaudeButton } from "@/components/resources/AskClaudeButton";
+import { FavoriteButton } from "@/components/resources/FavoriteButton";
+import { ResourceDiffDialog } from "@/components/resources/ResourceDiffDialog";
 import { gatherPodContext } from "@/lib/chat-context";
 import { ErrorAlert, SectionHeader, IconButton, StatusDot } from "@/components/atoms";
 import { DetailRow } from "@/components/molecules";
@@ -699,6 +702,7 @@ export function PodDetail() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [yamlOpen, setYamlOpen] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
   const [historyContainer, setHistoryContainer] = useState<string | null>(null);
   const [pfOpen, setPfOpen] = useState(false);
   const [pfPort, setPfPort] = useState<number | undefined>();
@@ -809,6 +813,7 @@ export function PodDetail() {
         <div className="flex items-center gap-2 pr-8">
           <SheetTitle className="truncate font-mono">{selectedPod}</SheetTitle>
           <div className="ml-auto flex shrink-0 items-center gap-1">
+            <FavoriteButton resourceType="pods" resourceName={selectedPod} />
             <AskClaudeButton
               gatherContext={() => gatherPodContext(selectedPod, activeContext ?? "", activeNamespace ?? "")}
               resourceKind="Pod"
@@ -817,6 +822,10 @@ export function PodDetail() {
             <Button variant="outline" size="sm" onClick={() => setYamlOpen(true)}>
               <FileCode className="h-3.5 w-3.5" />
               Edit YAML
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setDiffOpen(true)}>
+              <GitCompareArrows className="h-3.5 w-3.5" />
+              Compare
             </Button>
             <Button variant="outline" size="sm" onClick={() => handleOpenLogs()}>
               <ScrollText className="h-3.5 w-3.5" />
@@ -1197,6 +1206,13 @@ export function PodDetail() {
         resourceCoords={POD_COORDS}
         resourceName={selectedPod}
         onSaved={fetchDetail}
+      />
+
+      <ResourceDiffDialog
+        open={diffOpen}
+        onOpenChange={setDiffOpen}
+        resourceCoords={POD_COORDS}
+        sourceResourceName={selectedPod}
       />
 
       {detail?.workload_owner && historyContainer && (

@@ -48,6 +48,24 @@ body {
   @apply border-border;
 }
 
+/* Row change animation */
+@keyframes row-flash {
+  0%   { background-color: oklch(0.65 0.18 250 / 0.25); }
+  100% { background-color: transparent; }
+}
+.row-changed {
+  animation: row-flash 2s ease-out;
+}
+
+/* Auto-refresh indicator */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.auto-refresh-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
 /* Layout utilities */
 @utility flex-center {
   display: flex;

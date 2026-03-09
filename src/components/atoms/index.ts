@@ -3,3 +3,4 @@ export { ErrorAlert } from "./ErrorAlert";
 export { SectionHeader } from "./SectionHeader";
 export { IconButton } from "./IconButton";
 export { MonoText } from "./MonoText";
+export { SortableHead } from "./SortableHead";

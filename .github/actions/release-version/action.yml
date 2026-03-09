@@ -1,6 +1,11 @@
 name: Release Version
 description: Bump version using conventional commits, update project files, create tag and GitHub release.
 
+inputs:
+  token:
+    description: "GitHub PAT with repo scope (needed to trigger downstream workflows)"
+    required: true
+
 outputs:
   released:
     description: Whether a release was created
@@ -110,6 +115,9 @@ runs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
+        # Use PAT remote to trigger downstream workflows
+        git remote set-url origin "https://x-access-token:${{ inputs.token }}@github.com/${{ github.repository }}.git"
+
         git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
         git commit -m "chore(release): v${VERSION}"
         git tag "v${VERSION}"
@@ -119,7 +127,7 @@ runs:
       if: steps.bump.outputs.released == 'true'
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_TOKEN: ${{ inputs.token }}
       run: |
         VERSION="${{ steps.bump.outputs.version }}"
         gh release create "v${VERSION}" \

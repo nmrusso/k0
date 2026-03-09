@@ -1,7 +1,7 @@
 import { usePanelStore } from "@/stores/panelStore";
 import { useClusterStore } from "@/stores/clusterStore";
 import { stopLogStream, stopChatSession } from "@/lib/tauri-commands";
-import { ScrollText, Terminal, MessageCircle, X, Plus } from "lucide-react";
+import { ScrollText, Terminal, MessageCircle, X, Plus, ChevronDown, Eye, Activity } from "lucide-react";
 
 export function PanelTabBar() {
   const tabs = usePanelStore((s) => s.tabs);
@@ -9,6 +9,8 @@ export function PanelTabBar() {
   const setActiveTab = usePanelStore((s) => s.setActiveTab);
   const closeTab = usePanelStore((s) => s.closeTab);
   const openTerminalTab = usePanelStore((s) => s.openTerminalTab);
+  const openActivityTab = usePanelStore((s) => s.openActivityTab);
+  const togglePanel = usePanelStore((s) => s.togglePanel);
   const activeContext = useClusterStore((s) => s.activeContext);
   const activeNamespace = useClusterStore((s) => s.activeNamespace);
 
@@ -40,6 +42,8 @@ export function PanelTabBar() {
               <ScrollText className="h-3.5 w-3.5 shrink-0" />
             ) : tab.type === "chat" ? (
               <MessageCircle className="h-3.5 w-3.5 shrink-0" />
+            ) : tab.type === "activity" ? (
+              <Activity className="h-3.5 w-3.5 shrink-0" />
             ) : (
               <Terminal className="h-3.5 w-3.5 shrink-0" />
             )}
@@ -53,13 +57,29 @@ export function PanelTabBar() {
           </button>
         ))}
       </div>
-      <button
-        onClick={() => openTerminalTab({ context: activeContext ?? undefined, namespace: activeNamespace ?? undefined })}
-        className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors mx-1"
-        title="New terminal"
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </button>
+      <div className="ml-auto flex shrink-0 items-center">
+        <button
+          onClick={openActivityTab}
+          className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors mx-0.5"
+          title="Activity log"
+        >
+          <Eye className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={() => openTerminalTab({ context: activeContext ?? undefined, namespace: activeNamespace ?? undefined })}
+          className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors mx-0.5"
+          title="New terminal"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={togglePanel}
+          className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors mx-0.5"
+          title="Minimize panel"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 }

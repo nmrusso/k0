@@ -1,5 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
+import { withLog } from "@/stores/commandLogStore";
 import type {
+  MinikubeProfile,
+  MinikubeStatus,
+  MinikubeAddon,
+  MinikubeServiceEntry,
   ContextInfo,
   NamespaceInfo,
   PodInfo,
@@ -70,9 +75,11 @@ export const getIngresses = () => invoke<IngressInfo[]>("get_ingresses");
 export const getGateways = () => invoke<GatewayInfo[]>("get_gateways");
 
 // Pod actions
-export const deletePod = (name: string) => invoke<void>("delete_pod", { name });
+export const deletePod = (name: string) =>
+  withLog(`delete pod/${name}`, () => invoke<void>("delete_pod", { name }));
 export const execPodShell = (name: string, container: string) =>
-  invoke<void>("exec_pod_shell", { name, container });
+  withLog(`exec shell ${name} (${container})`, () =>
+    invoke<void>("exec_pod_shell", { name, container }));
 
 // Pod watch
 export const startWatchingPods = () => invoke<void>("start_watching_pods");
@@ -86,7 +93,7 @@ export const getSecretData = (secretName: string) =>
 
 // Detail views
 export const getPodDetail = (name: string) =>
-  invoke<PodDetailInfo>("get_pod_detail", { name });
+  withLog(`describe pod/${name}`, () => invoke<PodDetailInfo>("get_pod_detail", { name }));
 export const getIngressDetail = (name: string) =>
   invoke<IngressDetailInfo>("get_ingress_detail", { name });
 export const getGatewayDetail = (name: string) =>
@@ -116,16 +123,25 @@ export const updateResourceYaml = (
   coords: ResourceCoordinates,
   name: string,
   yamlContent: string,
-) => invoke<void>("update_resource_yaml", { ...coords, name, yamlContent });
+) =>
+  withLog(`apply yaml ${coords.kind.toLowerCase()}/${name}`, () =>
+    invoke<void>("update_resource_yaml", { ...coords, name, yamlContent }));
 
 export const patchResource = (
   coords: ResourceCoordinates,
   name: string,
   patchJson: Record<string, unknown>,
-) => invoke<void>("patch_resource", { ...coords, name, patchJson });
+) =>
+  withLog(`patch ${coords.kind.toLowerCase()}/${name}`, () =>
+    invoke<void>("patch_resource", { ...coords, name, patchJson }));
 
 export const getResourceDetail = (coords: ResourceCoordinates, name: string) =>
-  invoke<GenericResourceDetailInfo>("get_resource_detail", { ...coords, name });
+  withLog(`describe ${coords.kind.toLowerCase()}/${name}`, () =>
+    invoke<GenericResourceDetailInfo>("get_resource_detail", { ...coords, name }));
+
+export const deleteResource = (coords: ResourceCoordinates, name: string) =>
+  withLog(`delete ${coords.kind.toLowerCase()}/${name}`, () =>
+    invoke<void>("delete_resource", { ...coords, name }));
 
 // Generic resource listing
 export const getGenericResources = (
@@ -152,14 +168,15 @@ export const startLogStream = (
   tailLines?: number,
   sinceSeconds?: number,
 ) =>
-  invoke<string[]>("start_log_stream", {
-    sessionId,
-    targetKind,
-    targetName,
-    container,
-    tailLines,
-    sinceSeconds,
-  });
+  withLog(`logs ${targetKind.toLowerCase()}/${targetName}${container ? ` (${container})` : ""}`, () =>
+    invoke<string[]>("start_log_stream", {
+      sessionId,
+      targetKind,
+      targetName,
+      container,
+      tailLines,
+      sinceSeconds,
+    }));
 
 export const stopLogStream = (sessionId: string) =>
   invoke<void>("stop_log_stream", { sessionId });
@@ -184,15 +201,17 @@ export const startPortForward = (
   remotePort: number,
   localPort?: number,
 ) =>
-  invoke<PortForwardEntry>("start_port_forward", {
-    targetKind,
-    targetName,
-    remotePort,
-    localPort,
-  });
+  withLog(`port-forward ${targetKind.toLowerCase()}/${targetName} :${remotePort}`, () =>
+    invoke<PortForwardEntry>("start_port_forward", {
+      targetKind,
+      targetName,
+      remotePort,
+      localPort,
+    }));
 
 export const stopPortForward = (id: string) =>
-  invoke<void>("stop_port_forward", { id });
+  withLog(`stop port-forward ${id}`, () =>
+    invoke<void>("stop_port_forward", { id }));
 
 export const listPortForwards = () =>
   invoke<PortForwardEntry[]>("list_port_forwards");
@@ -212,10 +231,12 @@ export const getAllConfig = () =>
 
 // Deployment actions
 export const scaleDeployment = (name: string, replicas: number) =>
-  invoke<void>("scale_deployment", { name, replicas });
+  withLog(`scale deployment/${name} → ${replicas}`, () =>
+    invoke<void>("scale_deployment", { name, replicas }));
 
 export const restartDeployment = (name: string) =>
-  invoke<void>("restart_deployment", { name });
+  withLog(`rollout restart deployment/${name}`, () =>
+    invoke<void>("restart_deployment", { name }));
 
 export const getDeploymentInfo = (name: string) =>
   invoke<{
@@ -238,14 +259,15 @@ export const updateDeploymentResources = (
   limitsCpu: string,
   limitsMemory: string,
 ) =>
-  invoke<void>("update_deployment_resources", {
-    name,
-    containerName,
-    requestsCpu,
-    requestsMemory,
-    limitsCpu,
-    limitsMemory,
-  });
+  withLog(`update resources deployment/${name} (${containerName})`, () =>
+    invoke<void>("update_deployment_resources", {
+      name,
+      containerName,
+      requestsCpu,
+      requestsMemory,
+      limitsCpu,
+      limitsMemory,
+    }));
 
 // ExternalSecrets
 export const getExternalSecretsForDeployment = (deploymentName: string) =>
@@ -254,7 +276,8 @@ export const getExternalSecretsForDeployment = (deploymentName: string) =>
   );
 
 export const forceSyncExternalSecret = (externalSecretName: string, deploymentName: string) =>
-  invoke<void>("force_sync_external_secret", { externalSecretName, deploymentName });
+  withLog(`force sync externalsecret/${externalSecretName}`, () =>
+    invoke<void>("force_sync_external_secret", { externalSecretName, deploymentName }));
 
 // Graph overviews
 export const getNetworkGraph = () =>
@@ -284,7 +307,8 @@ export const helmGetHistory = (releaseName: string) =>
   invoke<HelmRevision[]>("helm_get_history", { releaseName });
 
 export const helmRollback = (releaseName: string, revision: number) =>
-  invoke<string>("helm_rollback", { releaseName, revision });
+  withLog(`helm rollback ${releaseName} → rev ${revision}`, () =>
+    invoke<string>("helm_rollback", { releaseName, revision }));
 
 export const helmDiffRevisions = (
   releaseName: string,
@@ -316,6 +340,57 @@ export const newrelicGetActiveAlerts = (context: string) =>
 
 export const newrelicGetContainerUsage = (context: string, podName: string, namespace: string) =>
   invoke<ContainerUsageSummary>("newrelic_get_container_usage", { context, podName, namespace });
+
+// Minikube
+export const minikubeCheckInstalled = () =>
+  invoke<boolean>("minikube_check_installed");
+
+export const minikubeListProfiles = () =>
+  invoke<MinikubeProfile[]>("minikube_list_profiles");
+
+export const minikubeGetStatus = (profile: string) =>
+  invoke<MinikubeStatus>("minikube_get_status", { profile });
+
+export const minikubeStartCluster = (
+  profile: string,
+  sessionId: string,
+  cpus?: string,
+  memory?: string,
+  driver?: string,
+  kubernetesVersion?: string,
+) =>
+  invoke<void>("minikube_start_cluster", {
+    profile,
+    sessionId,
+    cpus,
+    memory,
+    driver,
+    kubernetesVersion,
+  });
+
+export const minikubeStopCluster = (profile: string, sessionId: string) =>
+  invoke<void>("minikube_stop_cluster", { profile, sessionId });
+
+export const minikubeDeleteCluster = (profile: string, sessionId: string) =>
+  invoke<void>("minikube_delete_cluster", { profile, sessionId });
+
+export const minikubeListAddons = (profile: string) =>
+  invoke<MinikubeAddon[]>("minikube_list_addons", { profile });
+
+export const minikubeToggleAddon = (
+  profile: string,
+  addonName: string,
+  enable: boolean,
+) => invoke<string>("minikube_toggle_addon", { profile, addonName, enable });
+
+export const minikubeListServices = (profile: string) =>
+  invoke<MinikubeServiceEntry[]>("minikube_list_services", { profile });
+
+export const minikubeGetDashboardUrl = (profile: string) =>
+  invoke<string>("minikube_get_dashboard_url", { profile });
+
+export const minikubeGetIp = (profile: string) =>
+  invoke<string>("minikube_get_ip", { profile });
 
 // Chat — Claude CLI integration
 export const startChatSession = (

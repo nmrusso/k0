@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="k0 logo">
+  <!-- Hex -->
+  <path fill="none" stroke="#1E2A38" stroke-width="16" stroke-linejoin="round" stroke-linecap="round" d="M256 44 418 137v238L256 468 94 375V137L256 44z"/>
+
+  <!-- K0 optically centered -->
+  <g transform="translate(-55,6)">
+    <!-- K -->
+    <path fill="#E8ECF1" d="M178 150c0-10 8-18 18-18h18c10 0 18 8 18 18v86l64-70c4-4 9-7 15-7h26c16 0 24 20 12 31l-66 61 76 96c10 12 1 30-14 30h-24c-6 0-12-3-16-8l-66-85-7 6v69c0 10-8 18-18 18h-18c-10 0-18-8-18-18V150z"/>
+    <!-- 0 -->
+    <path fill="#3B82F6" d="M308 206c0-34 28-62 62-62s62 28 62 62v100c0 34-28 62-62 62s-62-28-62-62V206zm44 0v100c0 10 8 18 18 18s18-8 18-18V206c0-10-8-18-18-18s-18 8-18 18z"/>
+  </g>
+</svg>

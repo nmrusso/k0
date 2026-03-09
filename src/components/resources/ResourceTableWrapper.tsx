@@ -2,6 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, TableProperties, LayoutGrid } from "lucide-react";
 import { ErrorAlert } from "@/components/atoms";
 import { useClusterStore } from "@/stores/clusterStore";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -13,6 +14,8 @@ interface Props {
   sentinelRef?: React.RefCallback<HTMLElement>;
   onRefresh: () => void;
   extraControls?: React.ReactNode;
+  /** Auto-refresh interval in ms. Omit to disable. */
+  autoRefreshIntervalMs?: number;
   children: React.ReactNode;
 }
 
@@ -25,10 +28,14 @@ export function ResourceTableWrapper({
   sentinelRef,
   onRefresh,
   extraControls,
+  autoRefreshIntervalMs,
   children,
 }: Props) {
   const viewMode = useClusterStore((s) => s.viewMode);
   const setViewMode = useClusterStore((s) => s.setViewMode);
+
+  // Auto-refresh when interval is specified (0 disables)
+  useAutoRefresh(onRefresh, autoRefreshIntervalMs ?? 0);
 
   if (loading) {
     return (
@@ -47,7 +54,10 @@ export function ResourceTableWrapper({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          {autoRefreshIntervalMs && (
+            <span className="auto-refresh-dot h-1.5 w-1.5 rounded-full bg-emerald-500" title="Auto-refreshing" />
+          )}
           {visibleCount != null && visibleCount < count
             ? `${visibleCount} of ${count} items`
             : `${count} items`}
