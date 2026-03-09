@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTableSort } from "@/hooks/useTableSort";
+import { useTableSearch } from "@/hooks/useTableSearch";
 import { SortableHead } from "@/components/atoms";
 import {
   Table,
@@ -192,7 +193,9 @@ function PodCard({
 
 export function PodTable() {
   const { data, loading, error, refresh } = useResources<PodInfo>();
-  const { sortedItems, getSortProps } = useTableSort(data);
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredData = useTableSearch(data, searchQuery);
+  const { sortedItems, getSortProps } = useTableSort(filteredData);
   const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
     useInfiniteScroll({ items: sortedItems });
   const viewMode = useClusterStore((s) => s.viewMode);
@@ -282,6 +285,8 @@ export function PodTable() {
       sentinelRef={sentinelRef}
       onRefresh={refresh}
       extraControls={flatToggle}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
     >
       <BulkActionToolbar
         selectedCount={selectedNames.size}

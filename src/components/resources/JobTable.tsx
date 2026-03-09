@@ -19,6 +19,7 @@ import { BulkConfirmDialog } from "./BulkConfirmDialog";
 import { deleteResource } from "@/lib/tauri-commands";
 import { JOB_COORDS } from "@/lib/resource-coords";
 import { useTableSort } from "@/hooks/useTableSort";
+import { useTableSearch } from "@/hooks/useTableSearch";
 import type { JobInfo } from "@/types/k8s";
 
 function jobStatusVariant(status: string) {
@@ -29,12 +30,14 @@ function jobStatusVariant(status: string) {
 
 export function JobTable() {
   const { data, loading, error, refresh } = useResources<JobInfo>();
-  const { sortedItems, getSortProps } = useTableSort(data);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredData = useTableSearch(data, searchQuery);
+  const { sortedItems, getSortProps } = useTableSort(filteredData);
   const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
     useInfiniteScroll({ items: sortedItems });
   const viewMode = useClusterStore((s) => s.viewMode);
   const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -52,6 +55,8 @@ export function JobTable() {
         hasMore={hasMore}
         sentinelRef={sentinelRef}
         onRefresh={refresh}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       >
         {viewMode === "table" ? (
           <Table>

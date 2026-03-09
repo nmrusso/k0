@@ -1,5 +1,6 @@
+import { useRef } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RefreshCw, TableProperties, LayoutGrid } from "lucide-react";
+import { RefreshCw, TableProperties, LayoutGrid, Search, X } from "lucide-react";
 import { ErrorAlert } from "@/components/atoms";
 import { useClusterStore } from "@/stores/clusterStore";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
@@ -16,6 +17,8 @@ interface Props {
   extraControls?: React.ReactNode;
   /** Auto-refresh interval in ms. Omit to disable. */
   autoRefreshIntervalMs?: number;
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
   children: React.ReactNode;
 }
 
@@ -29,10 +32,13 @@ export function ResourceTableWrapper({
   onRefresh,
   extraControls,
   autoRefreshIntervalMs,
+  searchQuery,
+  onSearchChange,
   children,
 }: Props) {
   const viewMode = useClusterStore((s) => s.viewMode);
   const setViewMode = useClusterStore((s) => s.setViewMode);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-refresh when interval is specified (0 disables)
   useAutoRefresh(onRefresh, autoRefreshIntervalMs ?? 0);
@@ -53,6 +59,27 @@ export function ResourceTableWrapper({
 
   return (
     <div>
+      {onSearchChange && (
+        <div className="mb-2 relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery ?? ""}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Filter..."
+            className="w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-8 text-xs outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors placeholder:text-muted-foreground/60"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => { onSearchChange(""); searchInputRef.current?.focus(); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
       <div className="mb-2 flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           {autoRefreshIntervalMs && (

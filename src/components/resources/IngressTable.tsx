@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -11,10 +12,15 @@ import { useResources } from "@/hooks/useResources";
 import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
+import { useTableSearch } from "@/hooks/useTableSearch";
+import { useTableSort } from "@/hooks/useTableSort";
 import type { IngressInfo } from "@/types/k8s";
 
 export function IngressTable() {
   const { data, loading, error, refresh } = useResources<IngressInfo>();
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredData = useTableSearch(data, searchQuery);
+  const { sortedItems } = useTableSort(filteredData);
   const viewMode = useClusterStore((s) => s.viewMode);
   const setSelectedIngress = useClusterStore((s) => s.setSelectedIngress);
 
@@ -22,8 +28,10 @@ export function IngressTable() {
     <ResourceTableWrapper
       loading={loading}
       error={error}
-      count={data.length}
+      count={filteredData.length}
       onRefresh={refresh}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
     >
       {viewMode === "table" ? (
         <Table>
@@ -38,7 +46,7 @@ export function IngressTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((ing) => (
+            {sortedItems.map((ing) => (
               <TableRow
                 key={ing.name}
                 className="cursor-pointer"
@@ -60,7 +68,7 @@ export function IngressTable() {
         </Table>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {data.map((ing) => (
+          {sortedItems.map((ing) => (
             <ResourceCard
               key={ing.name}
               onClick={() => setSelectedIngress(ing.name)}

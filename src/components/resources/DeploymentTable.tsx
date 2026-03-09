@@ -46,6 +46,7 @@ import {
 import { DEPLOYMENT_COORDS } from "@/lib/resource-coords";
 import { SortableHead } from "@/components/atoms";
 import { useTableSort } from "@/hooks/useTableSort";
+import { useTableSearch } from "@/hooks/useTableSearch";
 import { useTableKeyboard } from "@/hooks/useTableKeyboard";
 import { useChangedRows } from "@/hooks/useChangedRows";
 import { useMultiSelect } from "@/hooks/useMultiSelect";
@@ -339,7 +340,9 @@ function ResourcesDialog({
 // --- Main DeploymentTable ---
 export function DeploymentTable() {
   const { data, loading, error, refresh } = useResources<DeploymentInfo>();
-  const { sortedItems, getSortProps } = useTableSort(data);
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredData = useTableSearch(data, searchQuery);
+  const { sortedItems, getSortProps } = useTableSort(filteredData);
   const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
     useInfiniteScroll({ items: sortedItems });
   const viewMode = useClusterStore((s) => s.viewMode);
@@ -483,6 +486,8 @@ export function DeploymentTable() {
         sentinelRef={sentinelRef}
         onRefresh={refresh}
         autoRefreshIntervalMs={30_000}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       >
         <BulkActionToolbar
           selectedCount={selectedNames.size}

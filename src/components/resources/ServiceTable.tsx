@@ -21,11 +21,14 @@ import { BulkConfirmDialog } from "./BulkConfirmDialog";
 import { deleteResource } from "@/lib/tauri-commands";
 import { SERVICE_COORDS } from "@/lib/resource-coords";
 import { useTableSort } from "@/hooks/useTableSort";
+import { useTableSearch } from "@/hooks/useTableSearch";
 import type { ServiceInfo } from "@/types/k8s";
 
 export function ServiceTable() {
   const { data, loading, error, refresh } = useResources<ServiceInfo>();
-  const { sortedItems, getSortProps } = useTableSort(data);
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredData = useTableSearch(data, searchQuery);
+  const { sortedItems, getSortProps } = useTableSort(filteredData);
   const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
     useInfiniteScroll({ items: sortedItems });
   const viewMode = useClusterStore((s) => s.viewMode);
@@ -45,6 +48,8 @@ export function ServiceTable() {
       hasMore={hasMore}
       sentinelRef={sentinelRef}
       onRefresh={refresh}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
     >
       {viewMode === "table" ? (
         <Table>

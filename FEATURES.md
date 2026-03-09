@@ -15,14 +15,16 @@
 ## Resource Browsing
 
 ### Workloads
-- **Pods**: Table/card view with status, restarts, IP, node, age. Flat view toggle to skip grouping.
-- **Deployments**: Ready/up-to-date/available counts. Scale, edit resources, restart actions.
-- **StatefulSets**: Replica status and age.
-- **DaemonSets**: Desired/current/ready counts.
-- **ReplicaSets**: Replica status display.
+- **Pods**: Table/card view with status, restarts, IP, node, age. Flat view toggle to skip grouping. Delete with confirmation modal.
+- **Deployments**: Ready/up-to-date/available counts. Scale, edit resources, restart actions. Delete with confirmation modal.
+- **StatefulSets**: Replica status and age. Delete with confirmation modal. Structured detail view (containers, status, labels, events).
+- **DaemonSets**: Desired/current/ready counts. Delete with confirmation modal. Structured detail view (containers, status, labels, events).
+- **ReplicaSets**: Replica status display. Delete with confirmation modal.
 - **ReplicationControllers**: Legacy controller listing.
-- **Jobs**: Completions and duration tracking.
-- **CronJobs**: Schedule, last run, active counts.
+- **Jobs**: Completions and duration tracking. Delete with confirmation modal. Structured detail view (containers, status, labels, events).
+- **CronJobs**: Schedule, last run, active counts. Delete with confirmation modal. Structured detail view (containers, schedule config, labels, events).
+
+All resource tables support **column sorting** (click any header to sort asc/desc) and **inline text filtering**.
 
 ### Networking
 - **Services**: Type, cluster IP, ports, age.
@@ -81,7 +83,7 @@
 - **Edit Resources**: Per-container CPU/memory requests and limits
 
 ### Pod Actions
-- **Delete Pod**: Direct pod deletion
+- **Delete Pod**: Pod deletion with confirmation modal
 - **Shell Access**: Interactive terminal into any container
 - **View Logs**: Real-time log streaming
 
@@ -188,6 +190,17 @@
 - Green dot when CLI is detected, red dot with install link when not found
 - Automatic detection on app startup
 
+## Activity Log
+
+### Command History Panel
+- Eye icon in the bottom panel bar opens the Activity tab
+- Every action performed by the IDE is logged: pod/resource deletion, scaling, restarts, port forwards, log streams, YAML edits, Helm rollbacks, ExternalSecret syncs, and more
+- Each entry shows: status icon (spinner / green check / red ✕), timestamp, command label, and execution duration (ms or seconds)
+- Failed commands display the error message inline below the entry
+- Entries shown in reverse-chronological order (newest first)
+- Clear button to reset the log
+- Persists within the session; resets on app restart
+
 ## Terminal & Logs
 
 ### Log Streaming
@@ -250,6 +263,7 @@
 ### Search & Filter
 - In-log search with highlighting
 - Resource tables with sortable columns
+- **Inline filter bar** on every resource table — type to instantly filter rows by any field (name, status, namespace, etc.). Clear button resets the filter.
 
 ### Dark Theme
 - Full dark mode interface

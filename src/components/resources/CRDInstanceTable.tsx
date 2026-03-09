@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTableSearch } from "@/hooks/useTableSearch";
+import { useTableSort } from "@/hooks/useTableSort";
 import {
   Table,
   TableBody,
@@ -31,6 +33,7 @@ export function CRDInstanceTable() {
   const [data, setData] = useState<CRDInstanceInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const parsed = parseCRDResource(activeResource);
 
@@ -58,6 +61,9 @@ export function CRDInstanceTable() {
     refresh();
   }, [refresh]);
 
+  const filteredData = useTableSearch(data, searchQuery);
+  const { sortedItems } = useTableSort(filteredData);
+
   if (!parsed) return null;
 
   return (
@@ -65,8 +71,10 @@ export function CRDInstanceTable() {
       <ResourceTableWrapper
         loading={loading}
         error={error}
-        count={data.length}
+        count={filteredData.length}
         onRefresh={refresh}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       >
         <div className="rounded-lg border border-border">
           <Table>
@@ -78,7 +86,7 @@ export function CRDInstanceTable() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.map((item) => (
+              {sortedItems.map((item) => (
                 <TableRow
                   key={item.name}
                   className="cursor-pointer hover:bg-muted/50"
@@ -91,7 +99,7 @@ export function CRDInstanceTable() {
                   <TableCell>{item.age}</TableCell>
                 </TableRow>
               ))}
-              {data.length === 0 && !loading && (
+              {sortedItems.length === 0 && !loading && (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center text-muted-foreground">
                     No instances found

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -11,12 +12,17 @@ import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
+import { useTableSearch } from "@/hooks/useTableSearch";
+import { useTableSort } from "@/hooks/useTableSort";
 import type { ConfigMapInfo } from "@/types/k8s";
 
 export function ConfigMapTable() {
   const { data, loading, error, refresh } = useResources<ConfigMapInfo>();
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredData = useTableSearch(data, searchQuery);
+  const { sortedItems } = useTableSort(filteredData);
   const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
-    useInfiniteScroll({ items: data });
+    useInfiniteScroll({ items: sortedItems });
   const viewMode = useClusterStore((s) => s.viewMode);
   const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
 
@@ -29,6 +35,8 @@ export function ConfigMapTable() {
       hasMore={hasMore}
       sentinelRef={sentinelRef}
       onRefresh={refresh}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
     >
       {viewMode === "table" ? (
         <Table>

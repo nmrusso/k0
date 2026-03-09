@@ -14,6 +14,8 @@ import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { useTableSearch } from "@/hooks/useTableSearch";
+import { useTableSort } from "@/hooks/useTableSort";
 import type { SecretInfo } from "@/types/k8s";
 
 function SecretTypeGroup({
@@ -88,8 +90,11 @@ function SecretTypeGroup({
 
 export function SecretTable() {
   const { data, loading, error, refresh } = useResources<SecretInfo>();
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredData = useTableSearch(data, searchQuery);
+  const { sortedItems } = useTableSort(filteredData);
   const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
-    useInfiniteScroll({ items: data });
+    useInfiniteScroll({ items: sortedItems });
   const viewMode = useClusterStore((s) => s.viewMode);
   const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
 
@@ -113,6 +118,8 @@ export function SecretTable() {
       hasMore={hasMore}
       sentinelRef={sentinelRef}
       onRefresh={refresh}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
     >
       <div className="space-y-1">
         {grouped.map(([type, secrets]) => (

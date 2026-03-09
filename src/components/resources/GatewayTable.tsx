@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -11,10 +12,15 @@ import { useResources } from "@/hooks/useResources";
 import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
+import { useTableSearch } from "@/hooks/useTableSearch";
+import { useTableSort } from "@/hooks/useTableSort";
 import type { GatewayInfo } from "@/types/k8s";
 
 export function GatewayTable() {
   const { data, loading, error, refresh } = useResources<GatewayInfo>();
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredData = useTableSearch(data, searchQuery);
+  const { sortedItems } = useTableSort(filteredData);
   const viewMode = useClusterStore((s) => s.viewMode);
   const setSelectedGateway = useClusterStore((s) => s.setSelectedGateway);
 
@@ -22,8 +28,10 @@ export function GatewayTable() {
     <ResourceTableWrapper
       loading={loading}
       error={error}
-      count={data.length}
+      count={filteredData.length}
       onRefresh={refresh}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
     >
       {viewMode === "table" ? (
         <Table>
@@ -37,7 +45,7 @@ export function GatewayTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((gw) => (
+            {sortedItems.map((gw) => (
               <TableRow
                 key={gw.name}
                 className="cursor-pointer"
@@ -58,7 +66,7 @@ export function GatewayTable() {
         </Table>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {data.map((gw) => (
+          {sortedItems.map((gw) => (
             <ResourceCard
               key={gw.name}
               onClick={() => setSelectedGateway(gw.name)}

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -10,12 +11,17 @@ import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { useResources } from "@/hooks/useResources";
 import { useClusterStore } from "@/stores/clusterStore";
 import { CLUSTER_SCOPED_RESOURCES } from "@/lib/resource-coords";
+import { useTableSearch } from "@/hooks/useTableSearch";
+import { useTableSort } from "@/hooks/useTableSort";
 import type { GenericResourceListItem } from "@/types/k8s";
 
 export function GenericResourceTable() {
   const activeResource = useClusterStore((s) => s.activeResource);
   const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
   const { data, loading, error, refresh } = useResources<GenericResourceListItem>();
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredData = useTableSearch(data, searchQuery);
+  const { sortedItems } = useTableSort(filteredData);
 
   const isClusterScoped = CLUSTER_SCOPED_RESOURCES.has(activeResource);
 
@@ -23,8 +29,10 @@ export function GenericResourceTable() {
     <ResourceTableWrapper
       loading={loading}
       error={error}
-      count={data.length}
+      count={filteredData.length}
       onRefresh={refresh}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
     >
       <div className="rounded-lg border border-border">
         <Table>
@@ -37,7 +45,7 @@ export function GenericResourceTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((item) => (
+            {sortedItems.map((item) => (
               <TableRow
                 key={`${item.namespace}/${item.name}`}
                 className="cursor-pointer hover:bg-muted/50"
@@ -51,7 +59,7 @@ export function GenericResourceTable() {
                 <TableCell>{item.age}</TableCell>
               </TableRow>
             ))}
-            {data.length === 0 && !loading && (
+            {sortedItems.length === 0 && !loading && (
               <TableRow>
                 <TableCell
                   colSpan={isClusterScoped ? 3 : 4}
