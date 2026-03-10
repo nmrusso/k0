@@ -101,6 +101,13 @@ export function useResources<T = unknown>() {
     refresh();
   }, [refresh]);
 
+  // Global "r" shortcut dispatches this event to trigger a refresh
+  useEffect(() => {
+    const handler = () => refresh();
+    document.addEventListener("k0:refresh", handler);
+    return () => document.removeEventListener("k0:refresh", handler);
+  }, [refresh]);
+
   // Pod watch subscription — capture context/namespace at subscription time
   // to discard events from a previous context
   useEffect(() => {

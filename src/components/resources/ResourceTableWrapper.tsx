@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, TableProperties, LayoutGrid, Search, X } from "lucide-react";
 import { ErrorAlert } from "@/components/atoms";
@@ -42,6 +42,14 @@ export function ResourceTableWrapper({
 
   // Auto-refresh when interval is specified (0 disables)
   useAutoRefresh(onRefresh, autoRefreshIntervalMs ?? 0);
+
+  // "/" shortcut focuses the search bar when onSearchChange is provided
+  useEffect(() => {
+    if (!onSearchChange) return;
+    const handler = () => searchInputRef.current?.focus();
+    document.addEventListener("k0:focus-search", handler);
+    return () => document.removeEventListener("k0:focus-search", handler);
+  }, [onSearchChange]);
 
   if (loading) {
     return (

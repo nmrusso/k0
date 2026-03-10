@@ -5,6 +5,17 @@ use std::sync::Mutex;
 
 const CURRENT_SCHEMA_VERSION: i32 = 1;
 
+/// Marker stored in SQLite to indicate a value lives in the OS keychain.
+const KEYCHAIN_MARKER: &str = "[keychain]";
+
+/// Keychain service identifier used for all k0 secrets.
+const KEYCHAIN_SERVICE: &str = "k0";
+
+/// Returns true for keys whose values must be stored in the OS keychain.
+fn is_sensitive(key: &str) -> bool {
+    key.contains("_api_key")
+}
+
 pub struct ConfigDB {
     conn: Mutex<Connection>,
 }
@@ -74,7 +85,15 @@ impl ConfigDB {
         Ok(data_dir.join("k0").join(db_name))
     }
 
+    fn keychain_entry(key: &str) -> Result<keyring::Entry, String> {
+        keyring::Entry::new(KEYCHAIN_SERVICE, key).map_err(|e| e.to_string())
+    }
+
     pub fn get(&self, key: &str) -> Result<Option<String>, String> {
+        if is_sensitive(key) {
+            return self.get_sensitive(key);
+        }
+
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare("SELECT value FROM config WHERE key = ?1")
@@ -89,7 +108,65 @@ impl ConfigDB {
         }
     }
 
+    /// Reads a sensitive key: fetches from OS keychain.
+    /// If a legacy plaintext value is found in SQLite, migrates it automatically.
+    fn get_sensitive(&self, key: &str) -> Result<Option<String>, String> {
+        // Read what's in SQLite for this key
+        let sqlite_val = {
+            let conn = self.conn.lock().map_err(|e| e.to_string())?;
+            let mut stmt = conn
+                .prepare("SELECT value FROM config WHERE key = ?1")
+                .map_err(|e| e.to_string())?;
+            let mut rows = stmt
+                .query_map(params![key], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?;
+            match rows.next() {
+                Some(Ok(val)) => Some(val),
+                Some(Err(e)) => return Err(e.to_string()),
+                None => None,
+            }
+        };
+
+        match sqlite_val.as_deref() {
+            None => Ok(None),
+            Some(KEYCHAIN_MARKER) => {
+                // Normal path: value is in keychain
+                match Self::keychain_entry(key)?.get_password() {
+                    Ok(secret) => Ok(Some(secret)),
+                    Err(keyring::Error::NoEntry) => Ok(None),
+                    Err(e) => Err(format!("Keychain read error: {}", e)),
+                }
+            }
+            Some(legacy_plaintext) => {
+                // Migration path: value was stored in plaintext before this fix.
+                // Move it to the keychain and replace SQLite value with the marker.
+                let secret = legacy_plaintext.to_owned();
+                Self::keychain_entry(key)?.set_password(&secret).map_err(|e| e.to_string())?;
+                let conn = self.conn.lock().map_err(|e| e.to_string())?;
+                conn.execute(
+                    "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
+                    params![key, KEYCHAIN_MARKER],
+                ).map_err(|e| e.to_string())?;
+                Ok(Some(secret))
+            }
+        }
+    }
+
     pub fn set(&self, key: &str, value: &str) -> Result<(), String> {
+        if is_sensitive(key) {
+            // Store the actual value in the OS keychain
+            Self::keychain_entry(key)?.set_password(value).map_err(|e| {
+                format!("Keychain write error: {}. Make sure an OS keychain (Secret Service, Keychain, or Credential Manager) is available.", e)
+            })?;
+            // Store a marker in SQLite so we know the key exists
+            let conn = self.conn.lock().map_err(|e| e.to_string())?;
+            conn.execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
+                params![key, KEYCHAIN_MARKER],
+            ).map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
             "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
@@ -99,6 +176,15 @@ impl ConfigDB {
     }
 
     pub fn delete(&self, key: &str) -> Result<(), String> {
+        if is_sensitive(key) {
+            // Remove from keychain (ignore if not present)
+            match Self::keychain_entry(key)?.delete_credential() {
+                Ok(_) | Err(keyring::Error::NoEntry) => {}
+                Err(e) => return Err(format!("Keychain delete error: {}", e)),
+            }
+        }
+
+        // Remove marker / value from SQLite
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.execute(
             "DELETE FROM config WHERE key = ?1",
@@ -107,6 +193,7 @@ impl ConfigDB {
         Ok(())
     }
 
+    /// Returns all config entries. Sensitive keys show "[stored securely]" instead of their value.
     pub fn get_all(&self) -> Result<HashMap<String, String>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
@@ -120,7 +207,13 @@ impl ConfigDB {
         let mut map = HashMap::new();
         for row in rows {
             let (k, v) = row.map_err(|e| e.to_string())?;
-            map.insert(k, v);
+            // Never expose the raw keychain marker to the frontend
+            let display_value = if v == KEYCHAIN_MARKER {
+                "[stored securely]".to_owned()
+            } else {
+                v
+            };
+            map.insert(k, display_value);
         }
         Ok(map)
     }

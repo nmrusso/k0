@@ -103,6 +103,13 @@ fn get_extra_kubeconfig_paths(config_db: &ConfigDB) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Returns false if the path contains any `..` component, which could be used
+/// for directory traversal to read files outside the intended location.
+fn is_safe_path(path: &Path) -> bool {
+    path.components()
+        .all(|c| !matches!(c, std::path::Component::ParentDir))
+}
+
 fn read_kubeconfigs_from_paths(extra_paths: &[String]) -> Vec<Kubeconfig> {
     let mut configs = Vec::new();
     for path_str in extra_paths {
@@ -116,11 +123,16 @@ fn read_kubeconfigs_from_paths(extra_paths: &[String]) -> Vec<Kubeconfig> {
             Path::new(path_str).to_path_buf()
         };
 
+        if !is_safe_path(&path) {
+            eprintln!("[kubeconfig] rejected path with traversal components: {:?}", path);
+            continue;
+        }
+
         if path.is_dir() {
             if let Ok(entries) = std::fs::read_dir(&path) {
                 for entry in entries.flatten() {
                     let entry_path = entry.path();
-                    if entry_path.is_file() {
+                    if entry_path.is_file() && is_safe_path(&entry_path) {
                         if let Ok(kc) = Kubeconfig::read_from(entry_path) {
                             configs.push(kc);
                         }

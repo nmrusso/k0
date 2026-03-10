@@ -4,7 +4,13 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const Sheet = DialogPrimitive.Root;
+// modal={false} prevents Radix from marking background elements as `inert`,
+// which would block interaction with the fixed bottom panel (z-[60] vs overlay z-50).
+// The existing onPointerDownOutside handler in SheetContent keeps the sheet open
+// when the user interacts with the bottom panel.
+function Sheet(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  return <DialogPrimitive.Root modal={false} {...props} />;
+}
 const SheetTrigger = DialogPrimitive.Trigger;
 const SheetClose = DialogPrimitive.Close;
 const SheetPortal = DialogPrimitive.Portal;

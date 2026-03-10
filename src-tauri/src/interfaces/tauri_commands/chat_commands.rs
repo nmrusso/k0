@@ -216,8 +216,11 @@ pub async fn execute_chat_action(
                 Api::namespaced_with(client, &ns, &api_resource);
 
             let data: kube::api::DynamicObject =
-                serde_json::from_value(serde_json::to_value(&doc).unwrap())
-                    .map_err(|e| format!("Failed to parse as dynamic object: {}", e))?;
+                serde_json::from_value(
+                    serde_json::to_value(&doc)
+                        .map_err(|e| format!("Failed to serialize YAML: {}", e))?,
+                )
+                .map_err(|e| format!("Failed to parse as dynamic object: {}", e))?;
 
             let _: kube::api::DynamicObject = api.patch(
                 name,

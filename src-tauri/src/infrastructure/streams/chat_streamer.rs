@@ -29,8 +29,41 @@ pub struct ChatSession {
     pub task_handle: tokio::task::JoinHandle<()>,
 }
 
+/// Redacts sensitive fields from Kubernetes Secret YAML before sending to AI.
+/// For any resource that is a Secret, replaces `data` and `stringData` with a notice.
+fn sanitize_resource_context(yaml: &str) -> String {
+    let Ok(mut value) = serde_yaml::from_str::<serde_yaml::Value>(yaml) else {
+        return yaml.to_string();
+    };
+
+    let is_secret = value
+        .get("kind")
+        .and_then(|k| k.as_str())
+        .map(|k| k.eq_ignore_ascii_case("secret"))
+        .unwrap_or(false);
+
+    if is_secret {
+        let redacted = serde_yaml::Value::String("[redacted — secret values are not sent to AI]".to_owned());
+        if let serde_yaml::Value::Mapping(ref mut map) = value {
+            let key_data = serde_yaml::Value::String("data".to_owned());
+            let key_string_data = serde_yaml::Value::String("stringData".to_owned());
+            if map.contains_key(&key_data) {
+                map.insert(key_data, redacted.clone());
+            }
+            if map.contains_key(&key_string_data) {
+                map.insert(key_string_data, redacted);
+            }
+        }
+        return serde_yaml::to_string(&value).unwrap_or_else(|_| yaml.to_string());
+    }
+
+    yaml.to_string()
+}
+
 fn build_system_prompt(context: &str, namespace: &str, active_resource: &str, resource_context: &str, permission_mode: &str) -> String {
-    let resource_data_section = if resource_context.is_empty() {
+    let safe_context = sanitize_resource_context(resource_context);
+
+    let resource_data_section = if safe_context.is_empty() {
         String::new()
     } else {
         format!(
@@ -38,7 +71,7 @@ fn build_system_prompt(context: &str, namespace: &str, active_resource: &str, re
 
 ## Resource Data (pre-loaded from K0)
 ```
-{resource_context}
+{safe_context}
 ```"#
         )
     };

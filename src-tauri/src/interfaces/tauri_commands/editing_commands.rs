@@ -4,6 +4,7 @@ use tauri::State;
 use crate::application::handlers::editing_handler::EditingHandler;
 use crate::domain::entities::GenericResourceDetailInfo;
 use crate::interfaces::state::AppState;
+use crate::interfaces::tauri_commands::sanitize_error_msg;
 
 #[tauri::command]
 pub async fn get_resource_yaml(
@@ -15,10 +16,10 @@ pub async fn get_resource_yaml(
     cluster_scoped: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let (client, ns) = state.client_manager.get_active_client().await.map_err(String::from)?;
+    let (client, ns) = state.client_manager.get_active_client().await.map_err(|e| sanitize_error_msg(e.to_string()))?;
     EditingHandler::get_resource_yaml(&client, &ns, &name, &group, &version, &kind, &plural, cluster_scoped.unwrap_or(false))
         .await
-        .map_err(Into::into)
+        .map_err(|e| sanitize_error_msg(e.to_string()))
 }
 
 #[tauri::command]
@@ -32,10 +33,10 @@ pub async fn update_resource_yaml(
     cluster_scoped: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let (client, ns) = state.client_manager.get_active_client().await.map_err(String::from)?;
+    let (client, ns) = state.client_manager.get_active_client().await.map_err(|e| sanitize_error_msg(e.to_string()))?;
     EditingHandler::update_resource_yaml(&client, &ns, &name, &group, &version, &kind, &plural, &yaml_content, cluster_scoped.unwrap_or(false))
         .await
-        .map_err(Into::into)
+        .map_err(|e| sanitize_error_msg(e.to_string()))
 }
 
 #[tauri::command]
@@ -49,10 +50,10 @@ pub async fn patch_resource(
     cluster_scoped: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let (client, ns) = state.client_manager.get_active_client().await.map_err(String::from)?;
+    let (client, ns) = state.client_manager.get_active_client().await.map_err(|e| sanitize_error_msg(e.to_string()))?;
     EditingHandler::patch_resource(&client, &ns, &name, &group, &version, &kind, &plural, &patch_json, cluster_scoped.unwrap_or(false))
         .await
-        .map_err(Into::into)
+        .map_err(|e| sanitize_error_msg(e.to_string()))
 }
 
 #[tauri::command]
@@ -65,10 +66,10 @@ pub async fn delete_resource(
     cluster_scoped: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let (client, ns) = state.client_manager.get_active_client().await.map_err(String::from)?;
+    let (client, ns) = state.client_manager.get_active_client().await.map_err(|e| sanitize_error_msg(e.to_string()))?;
     EditingHandler::delete_resource(&client, &ns, &name, &group, &version, &kind, &plural, cluster_scoped.unwrap_or(false))
         .await
-        .map_err(Into::into)
+        .map_err(|e| sanitize_error_msg(e.to_string()))
 }
 
 #[tauri::command]
@@ -81,8 +82,8 @@ pub async fn get_resource_detail(
     cluster_scoped: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<GenericResourceDetailInfo, String> {
-    let (client, ns) = state.client_manager.get_active_client().await.map_err(String::from)?;
+    let (client, ns) = state.client_manager.get_active_client().await.map_err(|e| sanitize_error_msg(e.to_string()))?;
     EditingHandler::get_generic_resource_detail(&client, &ns, &name, &group, &version, &kind, &plural, cluster_scoped.unwrap_or(false))
         .await
-        .map_err(Into::into)
+        .map_err(|e| sanitize_error_msg(e.to_string()))
 }

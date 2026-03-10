@@ -12,9 +12,16 @@ pub async fn query_nrql(
     account_id: &str,
     nrql: &str,
 ) -> Result<serde_json::Value, DomainError> {
+    // Validate account_id is purely numeric to prevent GraphQL injection.
+    let account_id_num: u64 = account_id.parse().map_err(|_| {
+        DomainError::ExternalApi(
+            "Invalid New Relic account ID: must be a numeric value".to_string(),
+        )
+    })?;
+
     let graphql_query = format!(
         r#"{{ actor {{ account(id: {}) {{ nrql(query: "{}") {{ results }} }} }} }}"#,
-        account_id,
+        account_id_num,
         nrql.replace('\\', "\\\\").replace('"', "\\\"")
     );
 
