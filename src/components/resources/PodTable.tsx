@@ -1,6 +1,4 @@
 import { useState, useMemo } from "react";
-import { useTableSort } from "@/hooks/useTableSort";
-import { useTableSearch } from "@/hooks/useTableSearch";
 import { SortableHead } from "@/components/atoms";
 import {
   Table,
@@ -11,8 +9,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useResources } from "@/hooks/useResources";
-import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
@@ -24,20 +20,19 @@ import { cn } from "@/lib/utils";
 import { useTableKeyboard } from "@/hooks/useTableKeyboard";
 import { useChangedRows } from "@/hooks/useChangedRows";
 import { useMultiSelect } from "@/hooks/useMultiSelect";
+import { useResourceTable } from "@/hooks/useResourceTable";
+import { useResourceDelete } from "@/hooks/useResourceDelete";
+import { POD_COORDS } from "@/lib/resource-coords";
 import { BulkActionToolbar } from "./BulkActionToolbar";
 import { BulkConfirmDialog } from "./BulkConfirmDialog";
+import { getPodStatusVariant } from "@/lib/status-variants";
 import type { PodInfo } from "@/types/k8s";
 
 const podKey = (p: PodInfo) => p.name;
 const podHash = (p: PodInfo) => `${p.status}|${p.restarts}|${p.ready}`;
 
-function statusVariant(status: string) {
-  if (status === "Running" || status === "Succeeded") return "success" as const;
-  if (status === "Pending") return "warning" as const;
-  if (status === "Failed" || status === "CrashLoopBackOff" || status === "Error")
-    return "destructive" as const;
-  return "secondary" as const;
-}
+// statusVariant delegated to shared lib/status-variants
+const statusVariant = getPodStatusVariant;
 
 interface PodGroup {
   key: string;
@@ -192,20 +187,15 @@ function PodCard({
 }
 
 export function PodTable() {
-  const { data, loading, error, refresh } = useResources<PodInfo>();
-  const [searchQuery, setSearchQuery] = useState("");
-  const filteredData = useTableSearch(data, searchQuery);
-  const { sortedItems, getSortProps } = useTableSort(filteredData);
-  const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
-    useInfiniteScroll({ items: sortedItems });
-  const viewMode = useClusterStore((s) => s.viewMode);
+  const { data, refresh, viewMode, getSortProps, visibleItems, wrapperProps } =
+    useResourceTable<PodInfo>();
   const setSelectedPod = useClusterStore((s) => s.setSelectedPod);
   const openLogTab = usePanelStore((s) => s.openLogTab);
   const changedRows = useChangedRows(data, podKey, podHash);
   const { selectedNames, toggleSelect, selectAll, clearSelection, isSelected, isAllSelected } =
     useMultiSelect(visibleItems);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const del = useResourceDelete(POD_COORDS, refresh);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [flatView, setFlatView] = useState(true);
 
@@ -222,7 +212,7 @@ export function PodTable() {
 
   const handleDeletePod = (e: React.MouseEvent, podName: string) => {
     e.stopPropagation();
-    setDeleteTarget(podName);
+    del.open(podName);
   };
 
   const handleOpenLogs = (e: React.MouseEvent, podName: string) => {
@@ -276,18 +266,7 @@ export function PodTable() {
   );
 
   return (
-    <ResourceTableWrapper
-      loading={loading}
-      error={error}
-      count={totalCount}
-      visibleCount={visibleCount}
-      hasMore={hasMore}
-      sentinelRef={sentinelRef}
-      onRefresh={refresh}
-      extraControls={flatToggle}
-      searchQuery={searchQuery}
-      onSearchChange={setSearchQuery}
-    >
+    <ResourceTableWrapper {...wrapperProps} extraControls={flatToggle}>
       <BulkActionToolbar
         selectedCount={selectedNames.size}
         onClearSelection={clearSelection}
@@ -311,17 +290,7 @@ export function PodTable() {
           refresh();
         }}
       />
-      <BulkConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        action="delete"
-        resourceNames={deleteTarget ? [deleteTarget] : []}
-        onConfirm={async () => {
-          if (!deleteTarget) return;
-          await deletePod(deleteTarget);
-          refresh();
-        }}
-      />
+      <BulkConfirmDialog {...del.dialogProps} />
       {flatView ? (
         // FLAT VIEW
         viewMode === "table" ? (

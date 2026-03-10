@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -8,31 +7,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useResources } from "@/hooks/useResources";
 import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
-import { useTableSearch } from "@/hooks/useTableSearch";
-import { useTableSort } from "@/hooks/useTableSort";
+import { useResourceTable } from "@/hooks/useResourceTable";
 import type { IngressInfo } from "@/types/k8s";
 
 export function IngressTable() {
-  const { data, loading, error, refresh } = useResources<IngressInfo>();
-  const [searchQuery, setSearchQuery] = useState("");
-  const filteredData = useTableSearch(data, searchQuery);
-  const { sortedItems } = useTableSort(filteredData);
-  const viewMode = useClusterStore((s) => s.viewMode);
+  const { viewMode, visibleItems, wrapperProps } = useResourceTable<IngressInfo>();
   const setSelectedIngress = useClusterStore((s) => s.setSelectedIngress);
 
   return (
-    <ResourceTableWrapper
-      loading={loading}
-      error={error}
-      count={filteredData.length}
-      onRefresh={refresh}
-      searchQuery={searchQuery}
-      onSearchChange={setSearchQuery}
-    >
+    <ResourceTableWrapper {...wrapperProps}>
       {viewMode === "table" ? (
         <Table>
           <TableHeader>
@@ -46,7 +32,7 @@ export function IngressTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedItems.map((ing) => (
+            {visibleItems.map((ing) => (
               <TableRow
                 key={ing.name}
                 className="cursor-pointer"
@@ -68,7 +54,7 @@ export function IngressTable() {
         </Table>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {sortedItems.map((ing) => (
+          {visibleItems.map((ing) => (
             <ResourceCard
               key={ing.name}
               onClick={() => setSelectedIngress(ing.name)}

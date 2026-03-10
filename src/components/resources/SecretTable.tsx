@@ -8,14 +8,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useResources } from "@/hooks/useResources";
-import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useTableSearch } from "@/hooks/useTableSearch";
-import { useTableSort } from "@/hooks/useTableSort";
+import { useResourceTable } from "@/hooks/useResourceTable";
 import type { SecretInfo } from "@/types/k8s";
 
 function SecretTypeGroup({
@@ -89,14 +85,7 @@ function SecretTypeGroup({
 }
 
 export function SecretTable() {
-  const { data, loading, error, refresh } = useResources<SecretInfo>();
-  const [searchQuery, setSearchQuery] = useState("");
-  const filteredData = useTableSearch(data, searchQuery);
-  const { sortedItems } = useTableSort(filteredData);
-  const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
-    useInfiniteScroll({ items: sortedItems });
-  const viewMode = useClusterStore((s) => s.viewMode);
-  const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
+  const { viewMode, setSelectedResourceName, visibleItems, wrapperProps } = useResourceTable<SecretInfo>();
 
   const grouped = useMemo(() => {
     const groups: Record<string, SecretInfo[]> = {};
@@ -110,17 +99,7 @@ export function SecretTable() {
   }, [visibleItems]);
 
   return (
-    <ResourceTableWrapper
-      loading={loading}
-      error={error}
-      count={totalCount}
-      visibleCount={visibleCount}
-      hasMore={hasMore}
-      sentinelRef={sentinelRef}
-      onRefresh={refresh}
-      searchQuery={searchQuery}
-      onSearchChange={setSearchQuery}
-    >
+    <ResourceTableWrapper {...wrapperProps}>
       <div className="space-y-1">
         {grouped.map(([type, secrets]) => (
           <SecretTypeGroup

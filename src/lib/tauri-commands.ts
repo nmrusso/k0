@@ -76,10 +76,12 @@ export const getGateways = () => invoke<GatewayInfo[]>("get_gateways");
 
 // Pod actions
 export const deletePod = (name: string) =>
-  withLog(`delete pod/${name}`, () => invoke<void>("delete_pod", { name }));
+  withLog(`delete pod/${name}`, () => invoke<void>("delete_pod", { name }),
+    `kubectl delete pod ${name}`);
 export const execPodShell = (name: string, container: string) =>
   withLog(`exec shell ${name} (${container})`, () =>
-    invoke<void>("exec_pod_shell", { name, container }));
+    invoke<void>("exec_pod_shell", { name, container }),
+    `kubectl exec -it ${name} -c ${container} -- /bin/sh`);
 
 // Pod watch
 export const startWatchingPods = () => invoke<void>("start_watching_pods");
@@ -93,7 +95,8 @@ export const getSecretData = (secretName: string) =>
 
 // Detail views
 export const getPodDetail = (name: string) =>
-  withLog(`describe pod/${name}`, () => invoke<PodDetailInfo>("get_pod_detail", { name }));
+  withLog(`describe pod/${name}`, () => invoke<PodDetailInfo>("get_pod_detail", { name }),
+    `kubectl describe pod ${name}`);
 export const getIngressDetail = (name: string) =>
   invoke<IngressDetailInfo>("get_ingress_detail", { name });
 export const getGatewayDetail = (name: string) =>
@@ -125,7 +128,8 @@ export const updateResourceYaml = (
   yamlContent: string,
 ) =>
   withLog(`apply yaml ${coords.kind.toLowerCase()}/${name}`, () =>
-    invoke<void>("update_resource_yaml", { ...coords, name, yamlContent }));
+    invoke<void>("update_resource_yaml", { ...coords, name, yamlContent }),
+    `kubectl apply -f - <<'EOF'\n${yamlContent}\nEOF`);
 
 export const patchResource = (
   coords: ResourceCoordinates,
@@ -133,15 +137,18 @@ export const patchResource = (
   patchJson: Record<string, unknown>,
 ) =>
   withLog(`patch ${coords.kind.toLowerCase()}/${name}`, () =>
-    invoke<void>("patch_resource", { ...coords, name, patchJson }));
+    invoke<void>("patch_resource", { ...coords, name, patchJson }),
+    `kubectl patch ${coords.kind.toLowerCase()} ${name} --type=merge -p '${JSON.stringify(patchJson)}'`);
 
 export const getResourceDetail = (coords: ResourceCoordinates, name: string) =>
   withLog(`describe ${coords.kind.toLowerCase()}/${name}`, () =>
-    invoke<GenericResourceDetailInfo>("get_resource_detail", { ...coords, name }));
+    invoke<GenericResourceDetailInfo>("get_resource_detail", { ...coords, name }),
+    `kubectl describe ${coords.kind.toLowerCase()} ${name}`);
 
 export const deleteResource = (coords: ResourceCoordinates, name: string) =>
   withLog(`delete ${coords.kind.toLowerCase()}/${name}`, () =>
-    invoke<void>("delete_resource", { ...coords, name }));
+    invoke<void>("delete_resource", { ...coords, name }),
+    `kubectl delete ${coords.kind.toLowerCase()} ${name}`);
 
 // Generic resource listing
 export const getGenericResources = (
@@ -176,7 +183,8 @@ export const startLogStream = (
       container,
       tailLines,
       sinceSeconds,
-    }));
+    }),
+    `kubectl logs -f ${targetKind.toLowerCase()}/${targetName}${container ? ` -c ${container}` : ""}${tailLines ? ` --tail=${tailLines}` : ""}${sinceSeconds ? ` --since=${sinceSeconds}s` : ""}`);
 
 export const stopLogStream = (sessionId: string) =>
   invoke<void>("stop_log_stream", { sessionId });
@@ -207,11 +215,13 @@ export const startPortForward = (
       targetName,
       remotePort,
       localPort,
-    }));
+    }),
+    `kubectl port-forward ${targetKind.toLowerCase()}/${targetName} ${localPort ?? ""}:${remotePort}`);
 
 export const stopPortForward = (id: string) =>
   withLog(`stop port-forward ${id}`, () =>
-    invoke<void>("stop_port_forward", { id }));
+    invoke<void>("stop_port_forward", { id }),
+    `# stop port-forward session: ${id}`);
 
 export const listPortForwards = () =>
   invoke<PortForwardEntry[]>("list_port_forwards");
@@ -232,11 +242,13 @@ export const getAllConfig = () =>
 // Deployment actions
 export const scaleDeployment = (name: string, replicas: number) =>
   withLog(`scale deployment/${name} → ${replicas}`, () =>
-    invoke<void>("scale_deployment", { name, replicas }));
+    invoke<void>("scale_deployment", { name, replicas }),
+    `kubectl scale deployment/${name} --replicas=${replicas}`);
 
 export const restartDeployment = (name: string) =>
   withLog(`rollout restart deployment/${name}`, () =>
-    invoke<void>("restart_deployment", { name }));
+    invoke<void>("restart_deployment", { name }),
+    `kubectl rollout restart deployment/${name}`);
 
 export const getDeploymentInfo = (name: string) =>
   invoke<{
@@ -267,7 +279,8 @@ export const updateDeploymentResources = (
       requestsMemory,
       limitsCpu,
       limitsMemory,
-    }));
+    }),
+    `kubectl set resources deployment/${name} -c ${containerName}${requestsCpu ? ` --requests=cpu=${requestsCpu}` : ""}${requestsMemory ? `,memory=${requestsMemory}` : ""}${limitsCpu ? ` --limits=cpu=${limitsCpu}` : ""}${limitsMemory ? `,memory=${limitsMemory}` : ""}`);
 
 // ExternalSecrets
 export const getExternalSecretsForDeployment = (deploymentName: string) =>
@@ -277,7 +290,8 @@ export const getExternalSecretsForDeployment = (deploymentName: string) =>
 
 export const forceSyncExternalSecret = (externalSecretName: string, deploymentName: string) =>
   withLog(`force sync externalsecret/${externalSecretName}`, () =>
-    invoke<void>("force_sync_external_secret", { externalSecretName, deploymentName }));
+    invoke<void>("force_sync_external_secret", { externalSecretName, deploymentName }),
+    `kubectl annotate externalsecret/${externalSecretName} force-sync=$(date +%s) --overwrite\nkubectl rollout restart deployment/${deploymentName}`);
 
 // Graph overviews
 export const getNetworkGraph = () =>
@@ -308,7 +322,8 @@ export const helmGetHistory = (releaseName: string) =>
 
 export const helmRollback = (releaseName: string, revision: number) =>
   withLog(`helm rollback ${releaseName} → rev ${revision}`, () =>
-    invoke<string>("helm_rollback", { releaseName, revision }));
+    invoke<string>("helm_rollback", { releaseName, revision }),
+    `helm rollback ${releaseName} ${revision}`);
 
 export const helmDiffRevisions = (
   releaseName: string,

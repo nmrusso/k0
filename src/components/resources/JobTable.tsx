@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -8,18 +7,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useResources } from "@/hooks/useResources";
-import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
 import { IconButton, SortableHead } from "@/components/atoms";
 import { Trash2 } from "lucide-react";
 import { BulkConfirmDialog } from "./BulkConfirmDialog";
-import { deleteResource } from "@/lib/tauri-commands";
 import { JOB_COORDS } from "@/lib/resource-coords";
-import { useTableSort } from "@/hooks/useTableSort";
-import { useTableSearch } from "@/hooks/useTableSearch";
+import { useResourceTable } from "@/hooks/useResourceTable";
+import { useResourceDelete } from "@/hooks/useResourceDelete";
 import type { JobInfo } from "@/types/k8s";
 
 function jobStatusVariant(status: string) {
@@ -29,35 +24,12 @@ function jobStatusVariant(status: string) {
 }
 
 export function JobTable() {
-  const { data, loading, error, refresh } = useResources<JobInfo>();
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const filteredData = useTableSearch(data, searchQuery);
-  const { sortedItems, getSortProps } = useTableSort(filteredData);
-  const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
-    useInfiniteScroll({ items: sortedItems });
-  const viewMode = useClusterStore((s) => s.viewMode);
-  const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    await deleteResource(JOB_COORDS, deleteTarget);
-    refresh();
-  };
+  const { refresh, viewMode, setSelectedResourceName, getSortProps, visibleItems, wrapperProps } = useResourceTable<JobInfo>();
+  const del = useResourceDelete(JOB_COORDS, refresh);
 
   return (
     <>
-      <ResourceTableWrapper
-        loading={loading}
-        error={error}
-        count={totalCount}
-        visibleCount={visibleCount}
-        hasMore={hasMore}
-        sentinelRef={sentinelRef}
-        onRefresh={refresh}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-      >
+      <ResourceTableWrapper {...wrapperProps}>
         {viewMode === "table" ? (
           <Table>
             <TableHeader>
@@ -82,7 +54,7 @@ export function JobTable() {
                   <TableCell>{job.age}</TableCell>
                   <TableCell>
                     <IconButton
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(job.name); }}
+                      onClick={(e) => { e.stopPropagation(); del.open(job.name); }}
                       variant="destructive"
                       title={`Delete ${job.name}`}
                     >
@@ -105,7 +77,7 @@ export function JobTable() {
                   <div className="flex items-center gap-1 shrink-0">
                     <Badge variant={jobStatusVariant(job.status)}>{job.status}</Badge>
                     <IconButton
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(job.name); }}
+                      onClick={(e) => { e.stopPropagation(); del.open(job.name); }}
                       variant="destructive"
                       title={`Delete ${job.name}`}
                     >
@@ -124,13 +96,7 @@ export function JobTable() {
         )}
       </ResourceTableWrapper>
 
-      <BulkConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        action="delete"
-        resourceNames={deleteTarget ? [deleteTarget] : []}
-        onConfirm={handleDelete}
-      />
+      <BulkConfirmDialog {...del.dialogProps} />
     </>
   );
 }

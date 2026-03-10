@@ -9,48 +9,27 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useResources } from "@/hooks/useResources";
-import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
 import { IconButton, SortableHead } from "@/components/atoms";
 import { PortForwardDialog } from "@/components/portforward/PortForwardDialog";
 import { ArrowUpRight, Trash2 } from "lucide-react";
 import { BulkConfirmDialog } from "./BulkConfirmDialog";
-import { deleteResource } from "@/lib/tauri-commands";
 import { SERVICE_COORDS } from "@/lib/resource-coords";
-import { useTableSort } from "@/hooks/useTableSort";
-import { useTableSearch } from "@/hooks/useTableSearch";
+import { useResourceTable } from "@/hooks/useResourceTable";
+import { useResourceDelete } from "@/hooks/useResourceDelete";
 import type { ServiceInfo } from "@/types/k8s";
 
 export function ServiceTable() {
-  const { data, loading, error, refresh } = useResources<ServiceInfo>();
-  const [searchQuery, setSearchQuery] = useState("");
-  const filteredData = useTableSearch(data, searchQuery);
-  const { sortedItems, getSortProps } = useTableSort(filteredData);
-  const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
-    useInfiniteScroll({ items: sortedItems });
-  const viewMode = useClusterStore((s) => s.viewMode);
-  const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
+  const { refresh, viewMode, setSelectedResourceName, getSortProps, visibleItems, wrapperProps } = useResourceTable<ServiceInfo>();
+  const del = useResourceDelete(SERVICE_COORDS, refresh);
   const [pfOpen, setPfOpen] = useState(false);
   const [pfService, setPfService] = useState("");
   const [pfPort, setPfPort] = useState<number | undefined>();
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   return (
     <>
-    <ResourceTableWrapper
-      loading={loading}
-      error={error}
-      count={totalCount}
-      visibleCount={visibleCount}
-      hasMore={hasMore}
-      sentinelRef={sentinelRef}
-      onRefresh={refresh}
-      searchQuery={searchQuery}
-      onSearchChange={setSearchQuery}
-    >
+    <ResourceTableWrapper {...wrapperProps}>
       {viewMode === "table" ? (
         <Table>
           <TableHeader>
@@ -94,7 +73,7 @@ export function ServiceTable() {
                       <ArrowUpRight className="h-3.5 w-3.5" />
                     </Button>
                     <IconButton
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(svc.name); }}
+                      onClick={(e) => { e.stopPropagation(); del.open(svc.name); }}
                       variant="destructive"
                       title={`Delete ${svc.name}`}
                     >
@@ -118,7 +97,7 @@ export function ServiceTable() {
                 <div className="flex items-center gap-1 shrink-0">
                   <Badge variant="secondary">{svc.service_type}</Badge>
                   <IconButton
-                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(svc.name); }}
+                    onClick={(e) => { e.stopPropagation(); del.open(svc.name); }}
                     variant="destructive"
                     title={`Delete ${svc.name}`}
                   >
@@ -146,17 +125,7 @@ export function ServiceTable() {
       defaultPort={pfPort}
     />
 
-    <BulkConfirmDialog
-      open={!!deleteTarget}
-      onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-      action="delete"
-      resourceNames={deleteTarget ? [deleteTarget] : []}
-      onConfirm={async () => {
-        if (!deleteTarget) return;
-        await deleteResource(SERVICE_COORDS, deleteTarget);
-        refresh();
-      }}
-    />
+    <BulkConfirmDialog {...del.dialogProps} />
     </>
   );
 }

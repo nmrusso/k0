@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -7,37 +6,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useResources } from "@/hooks/useResources";
-import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
-import { useTableSearch } from "@/hooks/useTableSearch";
-import { useTableSort } from "@/hooks/useTableSort";
+import { useResourceTable } from "@/hooks/useResourceTable";
 import type { ConfigMapInfo } from "@/types/k8s";
 
 export function ConfigMapTable() {
-  const { data, loading, error, refresh } = useResources<ConfigMapInfo>();
-  const [searchQuery, setSearchQuery] = useState("");
-  const filteredData = useTableSearch(data, searchQuery);
-  const { sortedItems } = useTableSort(filteredData);
-  const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
-    useInfiniteScroll({ items: sortedItems });
-  const viewMode = useClusterStore((s) => s.viewMode);
-  const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
+  const { viewMode, setSelectedResourceName, visibleItems, wrapperProps } = useResourceTable<ConfigMapInfo>();
 
   return (
-    <ResourceTableWrapper
-      loading={loading}
-      error={error}
-      count={totalCount}
-      visibleCount={visibleCount}
-      hasMore={hasMore}
-      sentinelRef={sentinelRef}
-      onRefresh={refresh}
-      searchQuery={searchQuery}
-      onSearchChange={setSearchQuery}
-    >
+    <ResourceTableWrapper {...wrapperProps}>
       {viewMode === "table" ? (
         <Table>
           <TableHeader>

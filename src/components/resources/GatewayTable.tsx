@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -8,31 +7,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useResources } from "@/hooks/useResources";
 import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
-import { useTableSearch } from "@/hooks/useTableSearch";
-import { useTableSort } from "@/hooks/useTableSort";
+import { useResourceTable } from "@/hooks/useResourceTable";
 import type { GatewayInfo } from "@/types/k8s";
 
 export function GatewayTable() {
-  const { data, loading, error, refresh } = useResources<GatewayInfo>();
-  const [searchQuery, setSearchQuery] = useState("");
-  const filteredData = useTableSearch(data, searchQuery);
-  const { sortedItems } = useTableSort(filteredData);
-  const viewMode = useClusterStore((s) => s.viewMode);
+  const { viewMode, visibleItems, wrapperProps } = useResourceTable<GatewayInfo>();
   const setSelectedGateway = useClusterStore((s) => s.setSelectedGateway);
 
   return (
-    <ResourceTableWrapper
-      loading={loading}
-      error={error}
-      count={filteredData.length}
-      onRefresh={refresh}
-      searchQuery={searchQuery}
-      onSearchChange={setSearchQuery}
-    >
+    <ResourceTableWrapper {...wrapperProps}>
       {viewMode === "table" ? (
         <Table>
           <TableHeader>
@@ -45,7 +31,7 @@ export function GatewayTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedItems.map((gw) => (
+            {visibleItems.map((gw) => (
               <TableRow
                 key={gw.name}
                 className="cursor-pointer"
@@ -66,7 +52,7 @@ export function GatewayTable() {
         </Table>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {sortedItems.map((gw) => (
+          {visibleItems.map((gw) => (
             <ResourceCard
               key={gw.name}
               onClick={() => setSelectedGateway(gw.name)}

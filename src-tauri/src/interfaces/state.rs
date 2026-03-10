@@ -1,4 +1,8 @@
 use std::collections::HashMap;
+
+/// Convenience alias for Tauri command return types.
+#[allow(dead_code)]
+pub type CmdResult<T> = Result<T, String>;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -8,32 +7,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
-import { useResources } from "@/hooks/useResources";
 import { useClusterStore } from "@/stores/clusterStore";
 import { CLUSTER_SCOPED_RESOURCES } from "@/lib/resource-coords";
-import { useTableSearch } from "@/hooks/useTableSearch";
-import { useTableSort } from "@/hooks/useTableSort";
+import { useResourceTable } from "@/hooks/useResourceTable";
 import type { GenericResourceListItem } from "@/types/k8s";
 
 export function GenericResourceTable() {
   const activeResource = useClusterStore((s) => s.activeResource);
-  const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
-  const { data, loading, error, refresh } = useResources<GenericResourceListItem>();
-  const [searchQuery, setSearchQuery] = useState("");
-  const filteredData = useTableSearch(data, searchQuery);
-  const { sortedItems } = useTableSort(filteredData);
+  const { loading, setSelectedResourceName, visibleItems, wrapperProps } = useResourceTable<GenericResourceListItem>();
 
   const isClusterScoped = CLUSTER_SCOPED_RESOURCES.has(activeResource);
 
   return (
-    <ResourceTableWrapper
-      loading={loading}
-      error={error}
-      count={filteredData.length}
-      onRefresh={refresh}
-      searchQuery={searchQuery}
-      onSearchChange={setSearchQuery}
-    >
+    <ResourceTableWrapper {...wrapperProps}>
       <div className="rounded-lg border border-border">
         <Table>
           <TableHeader>
@@ -45,7 +31,7 @@ export function GenericResourceTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedItems.map((item) => (
+            {visibleItems.map((item) => (
               <TableRow
                 key={`${item.namespace}/${item.name}`}
                 className="cursor-pointer hover:bg-muted/50"
@@ -59,7 +45,7 @@ export function GenericResourceTable() {
                 <TableCell>{item.age}</TableCell>
               </TableRow>
             ))}
-            {sortedItems.length === 0 && !loading && (
+            {visibleItems.length === 0 && !loading && (
               <TableRow>
                 <TableCell
                   colSpan={isClusterScoped ? 3 : 4}

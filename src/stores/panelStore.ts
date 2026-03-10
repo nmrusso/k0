@@ -28,6 +28,34 @@ export interface PanelTab {
 
 const MAX_LOG_LINES = 50_000;
 
+// ---------------------------------------------------------------------------
+// Internal helpers — not exported, only used inside the store
+// ---------------------------------------------------------------------------
+
+function createTab(type: PanelTabType, fields: Partial<PanelTab>): PanelTab {
+  return { id: crypto.randomUUID(), type, title: "", ...fields };
+}
+
+function updateTab(tabs: PanelTab[], id: string, patch: Partial<PanelTab>): PanelTab[] {
+  return tabs.map((t) => (t.id === id ? { ...t, ...patch } : t));
+}
+
+function updateTabFn(
+  tabs: PanelTab[],
+  id: string,
+  fn: (t: PanelTab) => PanelTab,
+): PanelTab[] {
+  return tabs.map((t) => (t.id === id ? fn(t) : t));
+}
+
+function openNewTab(
+  set: (fn: (s: PanelState) => Partial<PanelState>) => void,
+  tab: PanelTab,
+): string {
+  set((s) => ({ isOpen: true, tabs: [...s.tabs, tab], activeTabId: tab.id }));
+  return tab.id;
+}
+
 interface PanelState {
   isOpen: boolean;
   height: number;
@@ -81,92 +109,42 @@ export const usePanelStore = create<PanelState>((set, get) => ({
 
   setHeight: (h) => set({ height: h }),
 
-  openLogTab: ({ targetKind, targetName, title, container }) => {
-    const id = crypto.randomUUID();
-    const tab: PanelTab = {
-      id,
-      type: "logs",
-      title,
-      targetKind,
-      targetName,
+  openLogTab: ({ targetKind, targetName, title, container }) =>
+    openNewTab(set, createTab("logs", {
+      title, targetKind, targetName,
       selectedContainer: container ?? null,
       availableContainers: [],
       lines: [],
       isFollowing: true,
       searchQuery: "",
       isStreaming: true,
-    };
-    set((s) => ({
-      isOpen: true,
-      tabs: [...s.tabs, tab],
-      activeTabId: id,
-    }));
-    return id;
-  },
+    })),
 
-  openShellTab: ({ podName, containerName, context, namespace, title }) => {
-    const id = crypto.randomUUID();
-    const tab: PanelTab = {
-      id,
-      type: "shell",
-      title,
-      podName,
-      containerName,
-      context,
-      namespace,
-    };
-    set((s) => ({
-      isOpen: true,
-      tabs: [...s.tabs, tab],
-      activeTabId: id,
-    }));
-    return id;
-  },
+  openShellTab: ({ podName, containerName, context, namespace, title }) =>
+    openNewTab(set, createTab("shell", { title, podName, containerName, context, namespace })),
 
-  openChatTab: ({ resourceKind, resourceName, resourceContext, context, namespace }) => {
-    const id = crypto.randomUUID();
-    const title = `Ask Claude: ${resourceKind}/${resourceName}`;
-    const tab: PanelTab = {
-      id,
-      type: "chat",
-      title,
+  openChatTab: ({ resourceKind, resourceName, resourceContext, context, namespace }) =>
+    openNewTab(set, createTab("chat", {
+      title: `Ask Claude: ${resourceKind}/${resourceName}`,
       resourceKind,
       resourceName,
       resourceContext,
       context: context ?? undefined,
       namespace: namespace ?? undefined,
-    };
-    set((s) => ({
-      isOpen: true,
-      tabs: [...s.tabs, tab],
-      activeTabId: id,
-    }));
-    return id;
-  },
+    })),
 
   openTerminalTab: (params) => {
-    const id = crypto.randomUUID();
     const existingTerminals = get().tabs.filter((t: PanelTab) => t.type === "terminal");
     const num = existingTerminals.length + 1;
     const ctxShort = params?.context
-      ? params.context.length > 20
-        ? params.context.slice(-20)
-        : params.context
+      ? params.context.length > 20 ? params.context.slice(-20) : params.context
       : "";
     const title = ctxShort ? `Terminal ${num} (${ctxShort})` : `Terminal ${num}`;
-    const tab: PanelTab = {
-      id,
-      type: "terminal",
+    return openNewTab(set, createTab("terminal", {
       title,
       context: params?.context ?? undefined,
       namespace: params?.namespace ?? undefined,
-    };
-    set((s) => ({
-      isOpen: true,
-      tabs: [...s.tabs, tab],
-      activeTabId: id,
     }));
-    return id;
   },
 
   openActivityTab: () => {
@@ -175,10 +153,9 @@ export const usePanelStore = create<PanelState>((set, get) => ({
       set({ isOpen: true, activeTabId: existing.id });
       return existing.id;
     }
-    const id = "activity";
-    const tab: PanelTab = { id, type: "activity", title: "Activity" };
-    set((s) => ({ isOpen: true, tabs: [...s.tabs, tab], activeTabId: id }));
-    return id;
+    const tab: PanelTab = { id: "activity", type: "activity", title: "Activity" };
+    set((s) => ({ isOpen: true, tabs: [...s.tabs, tab], activeTabId: tab.id }));
+    return tab.id;
   },
 
   closeTab: (id) =>
@@ -199,56 +176,32 @@ export const usePanelStore = create<PanelState>((set, get) => ({
 
   appendLogLines: (tabId, lines) =>
     set((s) => ({
-      tabs: s.tabs.map((t) => {
-        if (t.id !== tabId) return t;
+      tabs: updateTabFn(s.tabs, tabId, (t) => {
         const combined = [...(t.lines || []), ...lines];
         return {
           ...t,
-          lines:
-            combined.length > MAX_LOG_LINES
-              ? combined.slice(combined.length - MAX_LOG_LINES)
-              : combined,
+          lines: combined.length > MAX_LOG_LINES
+            ? combined.slice(combined.length - MAX_LOG_LINES)
+            : combined,
         };
       }),
     })),
 
   clearLogLines: (tabId) =>
-    set((s) => ({
-      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, lines: [] } : t)),
-    })),
+    set((s) => ({ tabs: updateTab(s.tabs, tabId, { lines: [] }) })),
 
   setFollowing: (tabId, following) =>
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, isFollowing: following } : t,
-      ),
-    })),
+    set((s) => ({ tabs: updateTab(s.tabs, tabId, { isFollowing: following }) })),
 
   setSearchQuery: (tabId, query) =>
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, searchQuery: query } : t,
-      ),
-    })),
+    set((s) => ({ tabs: updateTab(s.tabs, tabId, { searchQuery: query }) })),
 
   setSelectedContainer: (tabId, container) =>
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, selectedContainer: container } : t,
-      ),
-    })),
+    set((s) => ({ tabs: updateTab(s.tabs, tabId, { selectedContainer: container }) })),
 
   setStreaming: (tabId, streaming) =>
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, isStreaming: streaming } : t,
-      ),
-    })),
+    set((s) => ({ tabs: updateTab(s.tabs, tabId, { isStreaming: streaming }) })),
 
   setAvailableContainers: (tabId, containers) =>
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, availableContainers: containers } : t,
-      ),
-    })),
+    set((s) => ({ tabs: updateTab(s.tabs, tabId, { availableContainers: containers }) })),
 }));

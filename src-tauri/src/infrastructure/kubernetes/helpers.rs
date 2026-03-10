@@ -7,6 +7,40 @@ use crate::application::services::formatting::format_age;
 use crate::domain::entities::common::{EventInfo, GenericResourceDetailInfo, OwnerRefInfo};
 use crate::domain::errors::DomainError;
 
+// ---------------------------------------------------------------------------
+// Shared K8s API helpers
+// ---------------------------------------------------------------------------
+
+/// Build a `kube::ApiResource` from group/version/kind/plural.
+/// Used for dynamic (CRD / generic) resource operations.
+pub fn build_api_resource(group: &str, version: &str, kind: &str, plural: &str) -> ApiResource {
+    ApiResource {
+        group: group.to_string(),
+        version: version.to_string(),
+        kind: kind.to_string(),
+        api_version: if group.is_empty() {
+            version.to_string()
+        } else {
+            format!("{}/{}", group, version)
+        },
+        plural: plural.to_string(),
+    }
+}
+
+/// Build a `Api<DynamicObject>`, choosing cluster-scoped or namespaced based on the flag.
+pub fn build_dynamic_api(
+    client: &Client,
+    namespace: &str,
+    ar: &ApiResource,
+    cluster_scoped: bool,
+) -> Api<DynamicObject> {
+    if cluster_scoped {
+        Api::all_with(client.clone(), ar)
+    } else {
+        Api::namespaced_with(client.clone(), namespace, ar)
+    }
+}
+
 pub async fn fetch_events_for(client: &Client, namespace: &str, name: &str, kind: &str) -> Vec<EventInfo> {
     let events_api: Api<Event> = Api::namespaced(client.clone(), namespace);
     let events_lp = ListParams::default()
@@ -42,22 +76,8 @@ pub async fn get_generic_resource_detail(
     plural: &str,
     cluster_scoped: bool,
 ) -> Result<GenericResourceDetailInfo, DomainError> {
-    let ar = ApiResource {
-        group: group.to_string(),
-        version: version.to_string(),
-        kind: kind.to_string(),
-        api_version: if group.is_empty() {
-            version.to_string()
-        } else {
-            format!("{}/{}", group, version)
-        },
-        plural: plural.to_string(),
-    };
-    let api: Api<DynamicObject> = if cluster_scoped {
-        Api::all_with(client.clone(), &ar)
-    } else {
-        Api::namespaced_with(client.clone(), namespace, &ar)
-    };
+    let ar = build_api_resource(group, version, kind, plural);
+    let api = build_dynamic_api(client, namespace, &ar, cluster_scoped);
     let obj = api.get(name).await?;
 
     let meta = obj.metadata;

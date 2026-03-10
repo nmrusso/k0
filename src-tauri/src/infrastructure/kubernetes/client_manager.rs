@@ -24,47 +24,19 @@ impl ClientManager {
         }
     }
 
-    pub async fn get_active_client(&self) -> Result<(Client, String), DomainError> {
-        let active_ctx = self.active_context.lock().await;
-        let ctx = active_ctx
+    /// Core method — all public accessors are derived from this.
+    async fn get_active_state(&self) -> Result<(Client, String, String), DomainError> {
+        let ctx = self.active_context.lock().await
             .as_ref()
             .ok_or(DomainError::NoActiveContext)?
             .clone();
-        drop(active_ctx);
 
-        let active_ns = self.active_namespace.lock().await;
-        let ns = active_ns
+        let ns = self.active_namespace.lock().await
             .as_ref()
             .ok_or(DomainError::NoActiveNamespace)?
             .clone();
-        drop(active_ns);
 
-        let clients = self.clients.lock().await;
-        let client = clients
-            .get(&ctx)
-            .ok_or_else(|| DomainError::Configuration("Client not found".to_string()))?
-            .clone();
-
-        Ok((client, ns))
-    }
-
-    pub async fn get_active_client_and_context(&self) -> Result<(Client, String, String), DomainError> {
-        let active_ctx = self.active_context.lock().await;
-        let ctx = active_ctx
-            .as_ref()
-            .ok_or(DomainError::NoActiveContext)?
-            .clone();
-        drop(active_ctx);
-
-        let active_ns = self.active_namespace.lock().await;
-        let ns = active_ns
-            .as_ref()
-            .ok_or(DomainError::NoActiveNamespace)?
-            .clone();
-        drop(active_ns);
-
-        let clients = self.clients.lock().await;
-        let client = clients
+        let client = self.clients.lock().await
             .get(&ctx)
             .ok_or_else(|| DomainError::Configuration("Client not found".to_string()))?
             .clone();
@@ -72,18 +44,28 @@ impl ClientManager {
         Ok((client, ns, ctx))
     }
 
+    /// Returns `(client, namespace)` — use for most namespaced commands.
+    pub async fn get_active_client(&self) -> Result<(Client, String), DomainError> {
+        let (client, ns, _) = self.get_active_state().await?;
+        Ok((client, ns))
+    }
+
+    /// Returns `(client, namespace, context_name)` — use when context name is needed.
+    pub async fn get_active_client_and_context(&self) -> Result<(Client, String, String), DomainError> {
+        self.get_active_state().await
+    }
+
+    /// Returns only the client — use for cluster-scoped or context-only operations
+    /// (does NOT require an active namespace, safe to call before namespace is selected).
     pub async fn get_client_for_context(&self) -> Result<Client, DomainError> {
-        let active_ctx = self.active_context.lock().await;
-        let ctx = active_ctx
+        let ctx = self.active_context.lock().await
             .as_ref()
             .ok_or(DomainError::NoActiveContext)?
             .clone();
-        drop(active_ctx);
 
-        let clients = self.clients.lock().await;
-        let client = clients
+        let client = self.clients.lock().await
             .get(&ctx)
-            .ok_or_else(|| DomainError::Configuration("Client not found for context".to_string()))?
+            .ok_or_else(|| DomainError::Configuration("Client not found".to_string()))?
             .clone();
 
         Ok(client)

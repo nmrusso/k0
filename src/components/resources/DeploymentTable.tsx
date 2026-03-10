@@ -16,13 +16,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useResources } from "@/hooks/useResources";
-import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useClusterStore } from "@/stores/clusterStore";
 import { usePanelStore } from "@/stores/panelStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
-import { IconButton } from "@/components/atoms";
+import { IconButton, SortableHead } from "@/components/atoms";
 import {
   ScrollText,
   Scaling,
@@ -41,15 +38,14 @@ import {
   updateDeploymentResources,
   getExternalSecretsForDeployment,
   forceSyncExternalSecret,
-  deleteResource,
 } from "@/lib/tauri-commands";
 import { DEPLOYMENT_COORDS } from "@/lib/resource-coords";
-import { SortableHead } from "@/components/atoms";
-import { useTableSort } from "@/hooks/useTableSort";
-import { useTableSearch } from "@/hooks/useTableSearch";
 import { useTableKeyboard } from "@/hooks/useTableKeyboard";
 import { useChangedRows } from "@/hooks/useChangedRows";
 import { useMultiSelect } from "@/hooks/useMultiSelect";
+import { useResourceTable } from "@/hooks/useResourceTable";
+import { useResourceDelete } from "@/hooks/useResourceDelete";
+import { useModalState } from "@/hooks/useModalState";
 import { BulkActionToolbar } from "./BulkActionToolbar";
 import { BulkConfirmDialog } from "./BulkConfirmDialog";
 import { cn } from "@/lib/utils";
@@ -108,9 +104,7 @@ function ScaleDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Scale Deployment</DialogTitle>
-          <DialogDescription className="font-mono text-xs">
-            {deploymentName}
-          </DialogDescription>
+          <DialogDescription className="font-mono text-xs">{deploymentName}</DialogDescription>
         </DialogHeader>
         {fetching ? (
           <div className="flex items-center justify-center py-6">
@@ -124,37 +118,22 @@ function ScaleDialog({
             <div className="space-y-2">
               <label className="text-sm font-medium">Desired replicas</label>
               <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setDesired(Math.max(0, desired - 1))}
-                >
+                <Button variant="outline" size="icon" className="h-8 w-8"
+                  onClick={() => setDesired(Math.max(0, desired - 1))}>
                   <Minus className="h-3.5 w-3.5" />
                 </Button>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={desired}
+                <Input type="number" min={0} max={100} value={desired}
                   onChange={(e) => setDesired(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-20 text-center"
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setDesired(desired + 1)}
-                >
+                  className="w-20 text-center" />
+                <Button variant="outline" size="icon" className="h-8 w-8"
+                  onClick={() => setDesired(desired + 1)}>
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button onClick={handleScale} disabled={loading}>
                 {loading && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
                 Scale
@@ -228,14 +207,7 @@ function ResourcesDialog({
     setLoading(true);
     setError(null);
     try {
-      await updateDeploymentResources(
-        deploymentName,
-        c.name,
-        reqCpu,
-        reqMem,
-        limCpu,
-        limMem,
-      );
+      await updateDeploymentResources(deploymentName, c.name, reqCpu, reqMem, limCpu, limMem);
       onDone();
       onOpenChange(false);
     } catch (e) {
@@ -250,9 +222,7 @@ function ResourcesDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Resources</DialogTitle>
-          <DialogDescription className="font-mono text-xs">
-            {deploymentName}
-          </DialogDescription>
+          <DialogDescription className="font-mono text-xs">{deploymentName}</DialogDescription>
         </DialogHeader>
         {fetching ? (
           <div className="flex items-center justify-center py-6">
@@ -263,13 +233,8 @@ function ResourcesDialog({
             {containers.length > 1 && (
               <div className="flex gap-1">
                 {containers.map((c, i) => (
-                  <Button
-                    key={c.name}
-                    variant={i === selectedIdx ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => selectContainer(i)}
-                    className="text-xs"
-                  >
+                  <Button key={c.name} variant={i === selectedIdx ? "default" : "outline"}
+                    size="sm" onClick={() => selectContainer(i)} className="text-xs">
                     {c.name}
                   </Button>
                 ))}
@@ -280,51 +245,27 @@ function ResourcesDialog({
                 Container: <span className="font-mono text-foreground">{containers[0].name}</span>
               </div>
             )}
-
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Requests CPU</label>
-                <Input
-                  value={reqCpu}
-                  onChange={(e) => setReqCpu(e.target.value)}
-                  placeholder="100m"
-                  className="text-xs font-mono"
-                />
+                <Input value={reqCpu} onChange={(e) => setReqCpu(e.target.value)} placeholder="100m" className="text-xs font-mono" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Requests Memory</label>
-                <Input
-                  value={reqMem}
-                  onChange={(e) => setReqMem(e.target.value)}
-                  placeholder="128Mi"
-                  className="text-xs font-mono"
-                />
+                <Input value={reqMem} onChange={(e) => setReqMem(e.target.value)} placeholder="128Mi" className="text-xs font-mono" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Limits CPU</label>
-                <Input
-                  value={limCpu}
-                  onChange={(e) => setLimCpu(e.target.value)}
-                  placeholder="500m"
-                  className="text-xs font-mono"
-                />
+                <Input value={limCpu} onChange={(e) => setLimCpu(e.target.value)} placeholder="500m" className="text-xs font-mono" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Limits Memory</label>
-                <Input
-                  value={limMem}
-                  onChange={(e) => setLimMem(e.target.value)}
-                  placeholder="256Mi"
-                  className="text-xs font-mono"
-                />
+                <Input value={limMem} onChange={(e) => setLimMem(e.target.value)} placeholder="256Mi" className="text-xs font-mono" />
               </div>
             </div>
-
             {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button onClick={handleSave} disabled={loading}>
                 {loading && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
                 Apply
@@ -339,16 +280,10 @@ function ResourcesDialog({
 
 // --- Main DeploymentTable ---
 export function DeploymentTable() {
-  const { data, loading, error, refresh } = useResources<DeploymentInfo>();
-  const [searchQuery, setSearchQuery] = useState("");
-  const filteredData = useTableSearch(data, searchQuery);
-  const { sortedItems, getSortProps } = useTableSort(filteredData);
-  const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
-    useInfiniteScroll({ items: sortedItems });
-  const viewMode = useClusterStore((s) => s.viewMode);
-  const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
-  const openLogTab = usePanelStore((s) => s.openLogTab);
+  const { data, refresh, viewMode, setSelectedResourceName, getSortProps, visibleItems, wrapperProps } =
+    useResourceTable<DeploymentInfo>();
 
+  const openLogTab = usePanelStore((s) => s.openLogTab);
   const changedRows = useChangedRows(data, depKey, depHash);
 
   const { getRowProps } = useTableKeyboard<DeploymentInfo>({
@@ -364,19 +299,17 @@ export function DeploymentTable() {
     useMultiSelect(visibleItems);
   const [bulkRestartOpen, setBulkRestartOpen] = useState(false);
 
-  const [scaleTarget, setScaleTarget] = useState<string | null>(null);
-  const [resourcesTarget, setResourcesTarget] = useState<string | null>(null);
+  const scale = useModalState<string>();
+  const resources = useModalState<string>();
+  const del = useResourceDelete(DEPLOYMENT_COORDS, refresh);
+
   const [restartingName, setRestartingName] = useState<string | null>(null);
   const [syncingName, setSyncingName] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const handleOpenLogs = (e: React.MouseEvent, name: string) => {
     e.stopPropagation();
-    openLogTab({
-      targetKind: "deployment",
-      targetName: name,
-      title: `deploy/${name}`,
-    });
+    openLogTab({ targetKind: "deployment", targetName: name, title: `deploy/${name}` });
   };
 
   const handleRestart = async (e: React.MouseEvent, name: string) => {
@@ -385,14 +318,10 @@ export function DeploymentTable() {
     try {
       await restartDeployment(name);
       refresh();
-    } catch {
-      // ignore
     } finally {
       setRestartingName(null);
     }
   };
-
-  const [syncError, setSyncError] = useState<string | null>(null);
 
   const handleSyncRestart = async (e: React.MouseEvent, name: string) => {
     e.stopPropagation();
@@ -417,53 +346,30 @@ export function DeploymentTable() {
 
   const ActionButtons = ({ name }: { name: string }) => (
     <div className="flex items-center gap-0.5">
-      <IconButton
-        onClick={(e) => { e.stopPropagation(); setScaleTarget(name); }}
-        title="Scale"
-      >
+      <IconButton onClick={(e) => { e.stopPropagation(); scale.open(name); }} title="Scale">
         <Scaling className="h-4 w-4" />
       </IconButton>
-      <IconButton
-        onClick={(e) => { e.stopPropagation(); setResourcesTarget(name); }}
-        title="Edit resources"
-      >
+      <IconButton onClick={(e) => { e.stopPropagation(); resources.open(name); }} title="Edit resources">
         <SlidersHorizontal className="h-4 w-4" />
       </IconButton>
-      <button
-        onClick={(e) => handleRestart(e, name)}
+      <button onClick={(e) => handleRestart(e, name)}
         className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-        title="Restart (rollout restart)"
-        disabled={restartingName === name}
-      >
-        {restartingName === name ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <RotateCcw className="h-4 w-4" />
-        )}
+        title="Restart (rollout restart)" disabled={restartingName === name}>
+        {restartingName === name
+          ? <Loader2 className="h-4 w-4 animate-spin" />
+          : <RotateCcw className="h-4 w-4" />}
       </button>
-      <button
-        onClick={(e) => handleSyncRestart(e, name)}
+      <button onClick={(e) => handleSyncRestart(e, name)}
         className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-        title="Sync secrets & restart"
-        disabled={syncingName === name}
-      >
-        {syncingName === name ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <RefreshCcw className="h-4 w-4" />
-        )}
+        title="Sync secrets & restart" disabled={syncingName === name}>
+        {syncingName === name
+          ? <Loader2 className="h-4 w-4 animate-spin" />
+          : <RefreshCcw className="h-4 w-4" />}
       </button>
-      <IconButton
-        onClick={(e) => handleOpenLogs(e, name)}
-        title={`View logs for ${name}`}
-      >
+      <IconButton onClick={(e) => handleOpenLogs(e, name)} title={`View logs for ${name}`}>
         <ScrollText className="h-4 w-4" />
       </IconButton>
-      <IconButton
-        onClick={(e) => { e.stopPropagation(); setDeleteTarget(name); }}
-        variant="destructive"
-        title={`Delete ${name}`}
-      >
+      <IconButton onClick={(e) => { e.stopPropagation(); del.open(name); }} variant="destructive" title={`Delete ${name}`}>
         <Trash2 className="h-4 w-4" />
       </IconButton>
     </div>
@@ -477,29 +383,16 @@ export function DeploymentTable() {
           <button onClick={() => setSyncError(null)} className="ml-2 hover:text-foreground">✕</button>
         </div>
       )}
-      <ResourceTableWrapper
-        loading={loading}
-        error={error}
-        count={totalCount}
-        visibleCount={visibleCount}
-        hasMore={hasMore}
-        sentinelRef={sentinelRef}
-        onRefresh={refresh}
-        autoRefreshIntervalMs={30_000}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-      >
+      <ResourceTableWrapper {...wrapperProps} autoRefreshIntervalMs={30_000}>
         <BulkActionToolbar
           selectedCount={selectedNames.size}
           onClearSelection={clearSelection}
-          actions={[
-            {
-              label: "Restart",
-              icon: <RotateCcw className="mr-1 h-3.5 w-3.5" />,
-              variant: "default",
-              onClick: () => setBulkRestartOpen(true),
-            },
-          ]}
+          actions={[{
+            label: "Restart",
+            icon: <RotateCcw className="mr-1 h-3.5 w-3.5" />,
+            variant: "default",
+            onClick: () => setBulkRestartOpen(true),
+          }]}
         />
         <BulkConfirmDialog
           open={bulkRestartOpen}
@@ -517,12 +410,9 @@ export function DeploymentTable() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8">
-                  <input
-                    type="checkbox"
-                    checked={isAllSelected}
+                  <input type="checkbox" checked={isAllSelected}
                     onChange={() => isAllSelected ? clearSelection() : selectAll()}
-                    className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
-                  />
+                    className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer" />
                 </TableHead>
                 <SortableHead label="Name" {...getSortProps("name")} />
                 <SortableHead label="Ready" {...getSortProps("ready")} />
@@ -534,24 +424,20 @@ export function DeploymentTable() {
             </TableHeader>
             <TableBody>
               {visibleItems.map((dep, idx) => (
-                <TableRow key={dep.name} className={cn("cursor-pointer", getRowProps(idx).className, changedRows.has(dep.name) && "row-changed")} onClick={() => setSelectedResourceName(dep.name)}>
+                <TableRow key={dep.name}
+                  className={cn("cursor-pointer", getRowProps(idx).className, changedRows.has(dep.name) && "row-changed")}
+                  onClick={() => setSelectedResourceName(dep.name)}>
                   <TableCell className="w-8" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={isSelected(dep.name)}
-                      onChange={() => {}}
+                    <input type="checkbox" checked={isSelected(dep.name)} onChange={() => {}}
                       onClick={(e) => { e.stopPropagation(); toggleSelect(dep.name); }}
-                      className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
-                    />
+                      className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer" />
                   </TableCell>
                   <TableCell className="font-mono text-xs">{dep.name}</TableCell>
                   <TableCell>{dep.ready}</TableCell>
                   <TableCell>{dep.up_to_date}</TableCell>
                   <TableCell>{dep.available}</TableCell>
                   <TableCell>{dep.age}</TableCell>
-                  <TableCell>
-                    <ActionButtons name={dep.name} />
-                  </TableCell>
+                  <TableCell><ActionButtons name={dep.name} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -559,14 +445,9 @@ export function DeploymentTable() {
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {visibleItems.map((dep) => (
-              <ResourceCard
-                key={dep.name}
-                onClick={() => setSelectedResourceName(dep.name)}
-              >
+              <ResourceCard key={dep.name} onClick={() => setSelectedResourceName(dep.name)}>
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="truncate font-mono text-sm font-medium">
-                    {dep.name}
-                  </span>
+                  <span className="truncate font-mono text-sm font-medium">{dep.name}</span>
                   <ActionButtons name={dep.name} />
                 </div>
                 <MetadataGrid>
@@ -582,28 +463,18 @@ export function DeploymentTable() {
       </ResourceTableWrapper>
 
       <ScaleDialog
-        open={!!scaleTarget}
-        onOpenChange={(open) => { if (!open) setScaleTarget(null); }}
-        deploymentName={scaleTarget || ""}
+        open={scale.isOpen}
+        onOpenChange={scale.setOpen}
+        deploymentName={scale.value ?? ""}
         onDone={refresh}
       />
       <ResourcesDialog
-        open={!!resourcesTarget}
-        onOpenChange={(open) => { if (!open) setResourcesTarget(null); }}
-        deploymentName={resourcesTarget || ""}
+        open={resources.isOpen}
+        onOpenChange={resources.setOpen}
+        deploymentName={resources.value ?? ""}
         onDone={refresh}
       />
-      <BulkConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        action="delete"
-        resourceNames={deleteTarget ? [deleteTarget] : []}
-        onConfirm={async () => {
-          if (!deleteTarget) return;
-          await deleteResource(DEPLOYMENT_COORDS, deleteTarget);
-          refresh();
-        }}
-      />
+      <BulkConfirmDialog {...del.dialogProps} />
     </>
   );
 }

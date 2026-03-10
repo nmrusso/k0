@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -7,50 +6,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useResources } from "@/hooks/useResources";
-import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useClusterStore } from "@/stores/clusterStore";
 import { ResourceTableWrapper } from "./ResourceTableWrapper";
 import { ResourceCard, MetadataGrid } from "@/components/molecules";
 import { IconButton, SortableHead } from "@/components/atoms";
 import { Trash2 } from "lucide-react";
 import { BulkConfirmDialog } from "./BulkConfirmDialog";
-import { deleteResource } from "@/lib/tauri-commands";
 import { DAEMONSET_COORDS } from "@/lib/resource-coords";
-import { useTableSort } from "@/hooks/useTableSort";
-import { useTableSearch } from "@/hooks/useTableSearch";
+import { useResourceTable } from "@/hooks/useResourceTable";
+import { useResourceDelete } from "@/hooks/useResourceDelete";
 import type { DaemonSetInfo } from "@/types/k8s";
 
 export function DaemonSetTable() {
-  const { data, loading, error, refresh } = useResources<DaemonSetInfo>();
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const filteredData = useTableSearch(data, searchQuery);
-  const { sortedItems, getSortProps } = useTableSort(filteredData);
-  const { visibleItems, totalCount, visibleCount, hasMore, sentinelRef } =
-    useInfiniteScroll({ items: sortedItems });
-  const viewMode = useClusterStore((s) => s.viewMode);
-  const setSelectedResourceName = useClusterStore((s) => s.setSelectedResourceName);
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    await deleteResource(DAEMONSET_COORDS, deleteTarget);
-    refresh();
-  };
+  const { refresh, viewMode, setSelectedResourceName, getSortProps, visibleItems, wrapperProps } = useResourceTable<DaemonSetInfo>();
+  const del = useResourceDelete(DAEMONSET_COORDS, refresh);
 
   return (
     <>
-      <ResourceTableWrapper
-        loading={loading}
-        error={error}
-        count={totalCount}
-        visibleCount={visibleCount}
-        hasMore={hasMore}
-        sentinelRef={sentinelRef}
-        onRefresh={refresh}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-      >
+      <ResourceTableWrapper {...wrapperProps}>
         {viewMode === "table" ? (
           <Table>
             <TableHeader>
@@ -75,7 +47,7 @@ export function DaemonSetTable() {
                   <TableCell>{ds.age}</TableCell>
                   <TableCell>
                     <IconButton
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(ds.name); }}
+                      onClick={(e) => { e.stopPropagation(); del.open(ds.name); }}
                       variant="destructive"
                       title={`Delete ${ds.name}`}
                     >
@@ -96,7 +68,7 @@ export function DaemonSetTable() {
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <span className="truncate font-mono text-sm font-medium">{ds.name}</span>
                   <IconButton
-                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(ds.name); }}
+                    onClick={(e) => { e.stopPropagation(); del.open(ds.name); }}
                     variant="destructive"
                     title={`Delete ${ds.name}`}
                   >
@@ -116,13 +88,7 @@ export function DaemonSetTable() {
         )}
       </ResourceTableWrapper>
 
-      <BulkConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        action="delete"
-        resourceNames={deleteTarget ? [deleteTarget] : []}
-        onConfirm={handleDelete}
-      />
+      <BulkConfirmDialog {...del.dialogProps} />
     </>
   );
 }

@@ -6,6 +6,8 @@ export interface LogEntry {
   id: string;
   timestamp: Date;
   label: string;
+  /** Full copyable command (e.g. kubectl equivalent) */
+  command?: string;
   status: LogStatus;
   error?: string;
   durationMs?: number;
@@ -14,7 +16,7 @@ export interface LogEntry {
 interface CommandLogState {
   entries: LogEntry[];
   /** Start a command log entry, returns its id */
-  begin: (label: string) => string;
+  begin: (label: string, command?: string) => string;
   /** Mark an entry as succeeded */
   succeed: (id: string, durationMs: number) => void;
   /** Mark an entry as failed */
@@ -27,9 +29,9 @@ const MAX_ENTRIES = 500;
 export const useCommandLogStore = create<CommandLogState>((set) => ({
   entries: [],
 
-  begin: (label) => {
+  begin: (label, command) => {
     const id = crypto.randomUUID();
-    const entry: LogEntry = { id, timestamp: new Date(), label, status: "running" };
+    const entry: LogEntry = { id, timestamp: new Date(), label, command, status: "running" };
     set((s) => ({
       entries: [...s.entries.slice(-MAX_ENTRIES + 1), entry],
     }));
@@ -54,9 +56,9 @@ export const useCommandLogStore = create<CommandLogState>((set) => ({
 }));
 
 /** Helper: wrap an async call with log bookkeeping */
-export function withLog<T>(label: string, fn: () => Promise<T>): Promise<T> {
+export function withLog<T>(label: string, fn: () => Promise<T>, command?: string): Promise<T> {
   const store = useCommandLogStore.getState();
-  const id = store.begin(label);
+  const id = store.begin(label, command);
   const start = Date.now();
   return fn().then(
     (result) => {

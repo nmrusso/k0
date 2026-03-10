@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use kube::api::{Api, ApiResource, DynamicObject, ListParams};
+use kube::api::{Api, DynamicObject, ListParams};
 use kube::Client;
 use k8s_openapi::api::core::v1::{Endpoints, Pod, Service};
 use k8s_openapi::api::networking::v1::Ingress;
@@ -10,6 +10,7 @@ use crate::application::services::formatting::format_age;
 use crate::domain::entities::*;
 use crate::domain::errors::DomainError;
 use crate::infrastructure::kubernetes::*;
+use crate::infrastructure::kubernetes::helpers::{build_api_resource, build_dynamic_api};
 
 pub struct ResourceHandler;
 
@@ -75,23 +76,8 @@ impl ResourceHandler {
         plural: &str,
         cluster_scoped: bool,
     ) -> Result<Vec<GenericResourceListItem>, DomainError> {
-        let ar = ApiResource {
-            group: group.to_string(),
-            version: version.to_string(),
-            kind: kind.to_string(),
-            api_version: if group.is_empty() {
-                version.to_string()
-            } else {
-                format!("{}/{}", group, version)
-            },
-            plural: plural.to_string(),
-        };
-
-        let api: Api<DynamicObject> = if cluster_scoped {
-            Api::all_with(client.clone(), &ar)
-        } else {
-            Api::namespaced_with(client.clone(), namespace, &ar)
-        };
+        let ar = build_api_resource(group, version, kind, plural);
+        let api = build_dynamic_api(client, namespace, &ar, cluster_scoped);
 
         let list = api.list(&ListParams::default()).await?;
 
@@ -330,14 +316,8 @@ impl ResourceHandler {
                     });
                 }
                 // Resolve HTTPRoutes: Gateway -> Service (deduplicated)
-                let ar = kube::api::ApiResource {
-                    group: "gateway.networking.k8s.io".to_string(),
-                    version: "v1".to_string(),
-                    kind: "HTTPRoute".to_string(),
-                    api_version: "gateway.networking.k8s.io/v1".to_string(),
-                    plural: "httproutes".to_string(),
-                };
-                let route_api: Api<DynamicObject> = Api::namespaced_with(client.clone(), namespace, &ar);
+                let ar = build_api_resource("gateway.networking.k8s.io", "v1", "HTTPRoute", "httproutes");
+                let route_api: Api<DynamicObject> = build_dynamic_api(client, namespace, &ar, false);
                 // Collect unique gw->svc edges, combining route names
                 let mut gw_svc_edges: HashMap<(String, String), Vec<String>> = HashMap::new();
                 if let Ok(routes) = route_api.list(&lp).await {
